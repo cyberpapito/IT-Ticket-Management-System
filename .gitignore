@@ -1,0 +1,73 @@
+# Backend (.NET)
+bin/
+obj/
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln.docstates
+.vs/
+packages/
+*.nupkg
+*.snupkg
+.env
+.env.local
+appsettings.Development.json
+
+# Frontend (Node)
+node_modules/
+dist/
+build/
+.next/
+out/
+coverage/
+.env
+.env.local
+.env.development
+.env.production
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+
+# Logs
+logs/
+*.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+.env.local
+.env.*.local
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Build artifacts
+build/
+dist/
+.next/
+out/
+
+# Test coverage
+coverage/
+.nyc_output/
