@@ -6,7 +6,7 @@ A production-ready, full-stack IT ticket management system demonstrating enterpr
 
 ---
 
-## 🎯 Project Overview
+## Project Overview
 
 This system manages IT support tickets across departments, enabling technicians to:
 - Create, update, and resolve support tickets
@@ -20,7 +20,7 @@ This system manages IT support tickets across departments, enabling technicians 
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 ### Backend
 - **Language:** C# 12
@@ -49,7 +49,7 @@ This system manages IT support tickets across departments, enabling technicians 
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Docker & Docker Compose (https://www.docker.com/products/docker-desktop)
@@ -93,7 +93,7 @@ npm run dev
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 IT-Ticket-Management-System/
@@ -124,7 +124,7 @@ IT-Ticket-Management-System/
 
 ---
 
-## 📚 API Documentation
+## API Documentation
 
 Interactive API docs available at **`/swagger`** when API is running.
 
@@ -163,7 +163,7 @@ GET    /api/health                    # Health check
 
 ---
 
-## 🏗️ Architecture Highlights
+## Architecture Highlights
 
 ### Clean Architecture Layers
 ```
@@ -179,9 +179,9 @@ SQL Server
 ```
 
 **Benefits:**
-- ✅ Each layer has single responsibility
+- Each layer has single responsibility
 - ✅ Easy to test (mock dependencies)
-- ✅ Easy to extend (add features without touching existing code)
+- Easy to extend (add features without touching existing code)
 
 ### CQRS-Lite (MediatR Pattern)
 ```
@@ -198,7 +198,7 @@ Domain Logic → Database
 
 ---
 
-## ✅ Testing
+## Testing
 
 ### Backend Tests
 ```bash
@@ -207,9 +207,9 @@ dotnet test
 ```
 
 Test coverage includes:
-- ✅ MediatR handler tests (CreateTicket, UpdateTicket, GetTickets)
-- ✅ Validator tests (required fields, valid enums)
-- ✅ Entity tests
+- MediatR handler tests (CreateTicket, UpdateTicket, GetTickets)
+- Validator tests (required fields, valid enums)
+- Entity tests
 
 ### Frontend Tests
 ```bash
@@ -218,12 +218,12 @@ npm test
 ```
 
 Test coverage includes:
-- ✅ Component tests (TicketTable, TicketForm, Dashboard)
-- ✅ Hook tests (useTickets, useAuth)
+- Component tests (TicketTable, TicketForm, Dashboard)
+- Hook tests (useTickets, useAuth)
 
 ---
 
-## 🔐 Authentication & Authorization
+## Authentication & Authorization
 
 ### JWT Bearer Tokens
 - Login endpoint returns JWT token
@@ -240,7 +240,7 @@ EndUser     → Can create tickets, view own tickets
 
 ---
 
-## 🚢 Deployment
+## Deployment
 
 ### Docker Compose (Local)
 ```bash
@@ -258,47 +258,36 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed steps.
 
 ---
 
-## 📊 Key Features
+## Key Features
 
-- ✅ **Full CRUD Operations** — Create, read, update, delete tickets
-- ✅ **Real-time Status Updates** — See changes immediately
-- ✅ **Advanced Filtering** — Filter by priority, status, assignee
-- ✅ **Pagination & Sorting** — Handle large datasets efficiently
-- ✅ **Analytics Dashboard** — KPI cards and charts
-- ✅ **Responsive Design** — Mobile, tablet, desktop
-- ✅ **JWT Authentication** — Secure stateless auth
-- ✅ **Role-Based Permissions** — Admin, Technician, EndUser
-- ✅ **Global Error Handling** — Graceful error messages
-- ✅ **Soft Deletes** — Data recovery without hard delete
-- ✅ **Audit Timestamps** — Track CreatedAt, UpdatedAt, ResolvedAt
+- **Full CRUD Operations** — Create, read, update, delete tickets
+- **Real-time Status Updates** — See changes immediately
+- **Advanced Filtering** — Filter by priority, status, assignee
+- **Pagination & Sorting** — Handle large datasets efficiently
+- **Analytics Dashboard** — KPI cards and charts
+- **Responsive Design** — Mobile, tablet, desktop
+- **JWT Authentication** — Secure stateless auth
+- **Role-Based Permissions** — Admin, Technician, EndUser
+- **Global Error Handling** — Graceful error messages
+- **Soft Deletes** — Data recovery without hard delete
+- **Audit Timestamps** — Track CreatedAt, UpdatedAt, ResolvedAt
 
----
 
-## 📈 Code Quality
-
-- **Test Coverage:** 75%+ backend, 50%+ frontend
-- **Code Style:** StyleCop (C#), ESLint (TypeScript)
-- **Security:** No SQL injection (parameterized queries), no hardcoded secrets
-- **Documentation:** Swagger API docs, inline code comments
-- **CI/CD:** GitHub Actions on every commit
-
----
-
-## 🔄 CI/CD Pipeline
+## CI/CD Pipeline
 
 GitHub Actions automatically:
-1. ✅ Builds backend (.NET solution)
-2. ✅ Builds frontend (Node.js)
-3. ✅ Runs backend tests (xUnit)
-4. ✅ Runs frontend tests (Vitest)
-5. ✅ Builds Docker images
-6. ✅ Reports coverage
+1. Builds backend (.NET solution)
+2. Builds frontend (Node.js)
+3. Runs backend tests (xUnit)
+4. Runs frontend tests (Vitest)
+5. Builds Docker images
+6. Reports coverage
 
 See [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)
 
 ---
 
-## 🧠 Learning Outcomes
+## Learning Outcomes
 
 Building this system demonstrates:
 
@@ -311,21 +300,8 @@ Building this system demonstrates:
 7. **Security** — JWT auth, role-based authorization, SQL injection prevention
 8. **Best Practices** — Git workflow, meaningful commits, documentation
 
----
 
-## 🔮 Future Enhancements
-
-- [ ] Event Sourcing (audit trail of all changes)
-- [ ] Background Job Processing (Hangfire for notifications)
-- [ ] Email Notifications (SendGrid integration)
-- [ ] Salesforce Integration (webhook sync)
-- [ ] GraphQL API (alternative to REST)
-- [ ] Advanced Reporting (custom date ranges, exports)
-- [ ] Multi-tenancy (support multiple organizations)
-
----
-
-## 📖 Resources
+## Resources
 
 ### C# / ASP.NET Core
 - [Microsoft Learn: ASP.NET Core](https://learn.microsoft.com/aspnet/core)
@@ -343,29 +319,15 @@ Building this system demonstrates:
 
 ---
 
-## 📄 License
+## License
 
 MIT License — See [LICENSE](./LICENSE) file
 
 ---
 
-## 👤 Author
+## Author
 
-**Your Name**  
-[LinkedIn](https://linkedin.com/in/yourname) | [Portfolio](https://yourwebsite.com)
-
----
-
-## 🙋 Contributing
-
-Contributions welcome! Please:
-1. Fork repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
+Adrian Rodriguez
 
 ---
 
