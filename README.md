@@ -1,335 +1,163 @@
 # IT Ticket Management System
 
-A production-ready, full-stack IT ticket management system demonstrating enterprise architecture patterns, modern web development practices, and complete DevOps workflow. Built with **C# / ASP.NET Core** backend and **React / TypeScript** frontend.
+A full-stack IT support ticket system built with **C# / ASP.NET Core** and **React / TypeScript**, backed by **SQL Server**. The system lets IT staff create, track, assign, and resolve support tickets.
 
-**Portfolio Project** for Miami-Dade County IT Software Developer Role
-
----
-
-## Project Overview
-
-This system manages IT support tickets across departments, enabling technicians to:
-- Create, update, and resolve support tickets
-- Assign tickets to team members
-- Track ticket status and priority in real-time
-- View analytics dashboards with KPIs and charts
-- Collaborate via ticket notes and comments
-
-**Live Demo:** [Coming Soon]  
-**Architecture:** [ARCHITECTURE.md](./ARCHITECTURE.md)
+> **Status:** Early development. This README describes the current state of the project, not a finished product. See [Roadmap](#roadmap) for what's done and what's planned.
 
 ---
 
-## Tech Stack
+## What it does
 
-### Backend
-- **Language:** C# 12
-- **Framework:** ASP.NET Core 8 (LTS)
-- **Database:** SQL Server (LocalDB / Docker)
-- **ORM:** Entity Framework Core 8
-- **Architecture:** Clean Architecture + CQRS-lite (MediatR)
-- **API Spec:** OpenAPI 3.0 (Swagger UI)
-- **Testing:** xUnit + Moq
-
-### Frontend
-- **Framework:** React 18
-- **Language:** TypeScript 5
-- **Styling:** Tailwind CSS 4
-- **State Management:** React Query (TanStack Query)
-- **Forms:** React Hook Form + Zod validation
-- **Charts:** Recharts
-- **Build Tool:** Vite
-- **Testing:** Vitest + React Testing Library
-
-### DevOps
-- **Containerization:** Docker + docker-compose
-- **CI/CD:** GitHub Actions
-- **Deployment:** Render.com (free tier)
-- **Version Control:** Git (GitHub)
+IT technicians and end users can:
+- Create support tickets with a title, description, and priority
+- View and filter tickets by status and priority
+- Update a ticket's details and status
+- Assign tickets to technicians
+- Add notes to a ticket for follow-up
 
 ---
 
-## Quick Start
+## Tech stack
+
+**Backend**
+- C# 12 / ASP.NET Core 8 (Web API)
+- Entity Framework Core 8
+- SQL Server (LocalDB for development)
+- Swagger / OpenAPI for interactive API docs
+- xUnit for unit tests
+
+**Frontend**
+- React 18 + TypeScript 5
+- Vite (build tool)
+- Tailwind CSS
+
+The backend is organized as a single ASP.NET Core project using a
+**Controller → Service → DbContext** flow: controllers handle HTTP,
+services hold the business logic, and Entity Framework Core handles data
+access. This is a deliberate choice for an app of this size — it keeps the
+code clear and easy to follow rather than over-engineering it.
+
+---
+
+## Getting started
 
 ### Prerequisites
-- Docker & Docker Compose (https://www.docker.com/products/docker-desktop)
-- Git
-- Node.js 18+ (for local frontend development)
-- .NET 8 SDK (for local backend development)
+- [.NET 8 SDK](https://dotnet.microsoft.com/download)
+- [Node.js 18+](https://nodejs.org/) (for the frontend)
+- SQL Server LocalDB (included with Visual Studio, or installable standalone)
 
-### Local Development (Docker)
-```bash
-# Clone repository
-git clone https://github.com/yourusername/IT-Ticket-Management-System.git
-cd IT-Ticket-Management-System
-
-# Start entire stack (API + DB + Frontend)
-docker-compose up
-
-# Access applications
-# Frontend: http://localhost:3000
-# API: http://localhost:5000
-# Swagger Docs: http://localhost:5000/swagger
-# SQL Server: localhost:1433 (user: sa, password: YourSecurePassword123!)
-```
-
-### Local Development (Native)
-**Backend:**
+### Run the backend
 ```bash
 cd backend
 dotnet restore
-dotnet build
-dotnet run --project TicketSystem.API
-# API running at: http://localhost:5000
+dotnet ef database update     # create the database from migrations
+dotnet run
+# API runs at http://localhost:5000
+# Swagger UI at http://localhost:5000/swagger
 ```
 
-**Frontend:**
+### Run the frontend
 ```bash
 cd frontend
 npm install
 npm run dev
-# UI running at: http://localhost:5173
+# UI runs at http://localhost:5173
 ```
 
 ---
 
-## Project Structure
+## API endpoints
+
+Interactive documentation is available at `/swagger` when the API is running.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET    | `/api/tickets`        | List tickets (filter by status, priority) |
+| POST   | `/api/tickets`        | Create a ticket |
+| GET    | `/api/tickets/{id}`   | Get a single ticket |
+| PUT    | `/api/tickets/{id}`   | Update a ticket |
+| DELETE | `/api/tickets/{id}`   | Soft-delete a ticket |
+| GET    | `/api/tickets/{id}/notes` | List a ticket's notes |
+| POST   | `/api/tickets/{id}/notes` | Add a note to a ticket |
+
+---
+
+## Project structure
 
 ```
 IT-Ticket-Management-System/
-├── backend/                          # ASP.NET Core API
-│   ├── TicketSystem.API/             # Controllers, middleware
-│   ├── TicketSystem.Application/     # Commands, queries, handlers
-│   ├── TicketSystem.Domain/          # Entities, value objects
-│   ├── TicketSystem.Infrastructure/  # DbContext, repositories
-│   ├── TicketSystem.Tests/           # xUnit tests
-│   └── TicketSystem.sln
-├── frontend/                         # React SPA
-│   ├── src/
-│   │   ├── pages/                    # Page components
-│   │   ├── components/               # Reusable UI components
-│   │   ├── hooks/                    # Custom React hooks
-│   │   ├── services/                 # API client, auth
-│   │   └── types/                    # TypeScript interfaces
-│   ├── package.json
-│   └── vite.config.ts
-├── docker-compose.yml                # Multi-container setup
-├── .github/
-│   └── workflows/
-│       └── ci.yml                    # GitHub Actions CI/CD
-├── ARCHITECTURE.md                   # Design decisions & patterns
-├── .gitignore
-└── LICENSE (MIT)
+├── backend/
+│   ├── Controllers/        # HTTP endpoints (thin, no business logic)
+│   ├── Services/           # Business logic
+│   ├── Models/             # Entities (Ticket, TicketNote) and enums
+│   ├── DTOs/               # Request/response shapes (kept separate from entities)
+│   ├── Data/               # AppDbContext, migrations, seed data
+│   └── Program.cs          # Startup and configuration
+│
+├── backend.Tests/          # xUnit tests for the service layer
+│
+├── frontend/
+│   └── src/
+│       ├── pages/          # Page components
+│       ├── components/     # Reusable UI components
+│       ├── hooks/          # Custom React hooks (API calls)
+│       └── types/          # TypeScript interfaces
+│
+└── README.md
 ```
 
 ---
 
-## API Documentation
+## Roadmap
 
-Interactive API docs available at **`/swagger`** when API is running.
+This is the build order. Items are checked off as they're actually working.
 
-### Core Endpoints
+**Backend**
+- [ ] `Ticket` and `TicketNote` entities with EF Core
+- [ ] SQL Server database via EF migrations
+- [ ] Ticket CRUD endpoints (create, read, update, soft-delete)
+- [ ] Filtering and pagination on the ticket list
+- [ ] Ticket notes endpoints
+- [ ] Service-layer unit tests (xUnit)
+- [ ] Seed data for development
 
-#### Tickets
-```
-GET    /api/tickets                   # List all tickets (paginated, filterable)
-POST   /api/tickets                   # Create new ticket
-GET    /api/tickets/{id}              # Get ticket details
-PUT    /api/tickets/{id}              # Update ticket
-DELETE /api/tickets/{id}              # Delete ticket (soft delete)
+**Frontend**
+- [ ] Ticket list page
+- [ ] Create ticket form
+- [ ] Ticket detail / edit page
+- [ ] Status and priority filtering
 
-GET    /api/tickets/{id}/notes        # Get ticket notes
-POST   /api/tickets/{id}/notes        # Add note to ticket
-```
-
-#### Users
-```
-GET    /api/users                     # List all users
-POST   /api/users                     # Create user
-GET    /api/users/{id}                # Get user details
-PUT    /api/users/{id}                # Update user
-```
-
-#### Authentication
-```
-POST   /api/auth/login                # Login (returns JWT token)
-POST   /api/auth/refresh              # Refresh expired token
-```
-
-#### Health
-```
-GET    /api/health                    # Health check
-```
+**Later / if time permits**
+- [ ] Simple JWT login (no refresh tokens)
+- [ ] Dashboard with basic charts
+- [ ] Live deployment (Azure free tier)
+- [ ] Docker setup
+- [ ] CI pipeline (GitHub Actions)
 
 ---
 
-## Architecture Highlights
+## Notes on design decisions
 
-### Clean Architecture Layers
-```
-TicketSystem.API
-  ↓ (HTTP Requests)
-TicketSystem.Application (MediatR Handlers)
-  ↓ (Business Logic)
-TicketSystem.Domain (Entities, Interfaces)
-  ↓ (Data Access)
-TicketSystem.Infrastructure (EF Core, Repositories)
-  ↓ (Database)
-SQL Server
-```
+A few choices worth explaining, since they're deliberate:
 
-**Benefits:**
-- Each layer has single responsibility
-- Easy to test (mock dependencies)
-- Easy to extend (add features without touching existing code)
-
-### CQRS-Lite (MediatR Pattern)
-```
-Commands (Write Operations)        Queries (Read Operations)
-├── CreateTicketCommand            ├── GetTicketsQuery
-├── UpdateTicketCommand            ├── GetTicketByIdQuery
-└── DeleteTicketCommand            └── GetUsersQuery
-
-↓
-Handlers (MediatR)
-↓
-Domain Logic → Database
-```
-
----
-
-## Testing
-
-### Backend Tests
-```bash
-cd backend
-dotnet test
-```
-
-Test coverage includes:
-- MediatR handler tests (CreateTicket, UpdateTicket, GetTickets)
-- Validator tests (required fields, valid enums)
-- Entity tests
-
-### Frontend Tests
-```bash
-cd frontend
-npm test
-```
-
-Test coverage includes:
-- Component tests (TicketTable, TicketForm, Dashboard)
-- Hook tests (useTickets, useAuth)
-
----
-
-## Authentication & Authorization
-
-### JWT Bearer Tokens
-- Login endpoint returns JWT token
-- Token stored in browser localStorage
-- Token injected in Authorization header: `Authorization: Bearer <token>`
-- Token expires after 24 hours (configurable)
-
-### Role-Based Access Control
-```
-Admin       → Full access (create, read, update, delete all)
-Technician  → Can manage assigned tickets + add notes
-EndUser     → Can create tickets, view own tickets
-```
-
----
-
-## Deployment
-
-### Docker Compose (Local)
-```bash
-docker-compose up
-# Spins up: SQL Server + API + Frontend
-```
-
-### Render.com (Cloud)
-1. Push to GitHub
-2. Connect GitHub repo to Render.com
-3. Set environment variables (connection string, JWT secret)
-4. Deploy
-
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed steps.
-
----
-
-## Key Features
-
-- **Full CRUD Operations** — Create, read, update, delete tickets
-- **Real-time Status Updates** — See changes immediately
-- **Advanced Filtering** — Filter by priority, status, assignee
-- **Pagination & Sorting** — Handle large datasets efficiently
-- **Analytics Dashboard** — KPI cards and charts
-- **Responsive Design** — Mobile, tablet, desktop
-- **JWT Authentication** — Secure stateless auth
-- **Role-Based Permissions** — Admin, Technician, EndUser
-- **Global Error Handling** — Graceful error messages
-- **Soft Deletes** — Data recovery without hard delete
-- **Audit Timestamps** — Track CreatedAt, UpdatedAt, ResolvedAt
-
-
-## CI/CD Pipeline
-
-GitHub Actions automatically:
-1. Builds backend (.NET solution)
-2. Builds frontend (Node.js)
-3. Runs backend tests (xUnit)
-4. Runs frontend tests (Vitest)
-5. Builds Docker images
-6. Reports coverage
-
-See [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)
-
----
-
-## Learning Outcomes
-
-Building this system demonstrates:
-
-1. **Enterprise Architecture** — Clean Architecture + CQRS patterns
-2. **Full-Stack Development** — Backend API + Frontend UI
-3. **Database Design** — SQL Server schema with EF Core migrations
-4. **Type Safety** — C# and TypeScript for compile-time safety
-5. **Testing & Quality** — Unit tests, validation, error handling
-6. **DevOps & Deployment** — Docker, GitHub Actions, cloud deployment
-7. **Security** — JWT auth, role-based authorization, SQL injection prevention
-8. **Best Practices** — Git workflow, meaningful commits, documentation
-
-
-## Resources
-
-### C# / ASP.NET Core
-- [Microsoft Learn: ASP.NET Core](https://learn.microsoft.com/aspnet/core)
-- [Entity Framework Core Docs](https://learn.microsoft.com/ef/core)
-- [Clean Architecture Guide](https://github.com/ardalis/CleanArchitecture)
-
-### React / TypeScript
-- [React Documentation](https://react.dev)
-- [TypeScript Handbook](https://www.typescriptlang.org/docs/)
-- [React Query Docs](https://tanstack.com/query/latest)
-
-### DevOps / Docker
-- [Docker Docs](https://docs.docker.com/)
-- [GitHub Actions Docs](https://docs.github.com/en/actions)
+- **Single project, not multi-layer Clean Architecture.** For an app this
+  size, a clean single project is easier to follow and maintain than four
+  separate layers. The Controller → Service → DbContext split already gives
+  good separation of concerns.
+- **DTOs separate from entities.** API requests and responses use their own
+  classes rather than exposing EF entities directly. This keeps the database
+  shape and the API contract independent.
+- **Soft deletes.** Tickets are marked deleted with a timestamp rather than
+  removed, so records can be recovered and history is preserved.
 
 ---
 
 ## License
 
-MIT License — See [LICENSE](./LICENSE) file
+MIT License — see [LICENSE](./LICENSE).
 
 ---
 
 ## Author
 
 Adrian Rodriguez
-
----
-
-**Last Updated:** June 2026  
-**Status:** Active Development
