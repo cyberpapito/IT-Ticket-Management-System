@@ -180,7 +180,7 @@ SQL Server
 
 **Benefits:**
 - Each layer has single responsibility
-- ✅ Easy to test (mock dependencies)
+- Easy to test (mock dependencies)
 - Easy to extend (add features without touching existing code)
 
 ### CQRS-Lite (MediatR Pattern)
@@ -332,4 +332,4 @@ Adrian Rodriguez
 ---
 
 **Last Updated:** June 2026  
-**Status:** 🟢 Active Development
+**Status:** Active Development

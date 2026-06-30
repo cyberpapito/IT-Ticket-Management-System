@@ -1,4 +1,4 @@
-# Architecture Decision Record
+# Architecture
 
 This document explains the architectural choices, patterns, and trade-offs in the IT Ticket Management System.
 
@@ -6,40 +6,36 @@ This document explains the architectural choices, patterns, and trade-offs in th
 
 ## 1. Clean Architecture
 
-### Decision
-Organize codebase into **4 independent layers**: API, Application, Domain, and Infrastructure.
+The codebase is organized into four projects, each with a single responsibility. Dependencies only point inward, toward the Domain.
 
-### Structure
 ```
-┌─────────────────────────────────────────┐
-│  TicketSystem.API (Controllers)         │ ← HTTP entry point
-├─────────────────────────────────────────┤
-│  TicketSystem.Application (Handlers)    │ ← Business logic orchestration
-├─────────────────────────────────────────┤
-│  TicketSystem.Domain (Entities)         │ ← Core business rules
-├─────────────────────────────────────────┤
-│  TicketSystem.Infrastructure (EF Core)  │ ← Data access
-└─────────────────────────────────────────┘
-        ↓ (only downward dependencies)
+API              depends on Application, Infrastructure
+Application      depends on Domain
+Infrastructure   depends on Domain, Application
+Domain           depends on nothing
 ```
+
+- API: HTTP entry point. Controllers receive requests and pass them to the Application layer.
+- Application: Business logic. Orchestrates operations, validation, and mapping.
+- Domain: Core entities and business rules. Knows nothing about the database or HTTP.
+- Infrastructure: Data access. Implements database operations using Entity Framework Core.
 
 ### Benefits
-- **Testability** — Mock Infrastructure layer in tests
-- **Flexibility** — Swap SQL Server for PostgreSQL without touching business logic
-- **Maintainability** — Each layer has single responsibility
-- **Enterprise-Ready** — Used by Microsoft, major tech companies
+
+- Testability: the Infrastructure layer can be mocked in tests.
+- Flexibility: the database can be swapped without changing business logic.
+- Maintainability: each layer has one clear purpose.
 
 ### Trade-offs
-- **More Files** — 4 projects instead of 1 monolith
-- **Setup Overhead** — More boilerplate initially
-- **Learning Curve** — Team needs to understand layer contracts
 
-### Example
-```
-// Feature: Create Ticket
-// ════════════════════════════════════════════════════════════════
+- More projects to manage than a single-project application.
+- More setup and boilerplate at the start.
+- Requires understanding of how the layers depend on each other.
 
-// 1️⃣ API Layer (Controllers)
+### Example: creating a ticket
+
+```csharp
+// API layer (Controller)
 [ApiController]
 public class TicketsController
 {
@@ -52,24 +48,20 @@ public class TicketsController
     }
 }
 
-// 2️⃣ Application Layer (MediatR Handler)
+// Application layer (Handler)
 public class CreateTicketCommandHandler : IRequestHandler<CreateTicketCommand, TicketDto>
 {
     private readonly ITicketRepository _repository;
-    
+
     public async Task<TicketDto> Handle(CreateTicketCommand command, CancellationToken ct)
     {
-        // ✓ Validate input
-        // ✓ Check business rules (can user create ticket?)
-        // ✓ Create entity
-        // ✓ Save to repository
         var ticket = new Ticket(command.Title, command.Description);
         await _repository.AddAsync(ticket);
         return _mapper.Map<TicketDto>(ticket);
     }
 }
 
-// 3️⃣ Domain Layer (Entities)
+// Domain layer (Entity)
 public class Ticket
 {
     public Guid Id { get; set; }
@@ -77,9 +69,8 @@ public class Ticket
     public string Description { get; set; }
     public TicketPriority Priority { get; set; }
     public TicketStatus Status { get; set; }
-    
-    // Business logic encapsulated here
-    public void Resolve(string resolution)
+
+    public void Resolve()
     {
         if (Status != TicketStatus.InProgress)
             throw new InvalidOperationException("Only in-progress tickets can be resolved");
@@ -88,11 +79,11 @@ public class Ticket
     }
 }
 
-// 4️⃣ Infrastructure Layer (Entity Framework)
+// Infrastructure layer (Repository)
 public class TicketRepository : ITicketRepository
 {
     private readonly TicketDbContext _context;
-    
+
     public async Task AddAsync(Ticket ticket)
     {
         _context.Tickets.Add(ticket);
@@ -103,31 +94,21 @@ public class TicketRepository : ITicketRepository
 
 ---
 
-## 2. CQRS-Lite (MediatR Pattern)
+## 2. CQRS-Lite (MediatR)
 
-### Decision
-Separate read operations (Queries) from write operations (Commands) using MediatR handlers.
+CQRS stands for Command Query Responsibility Segregation. It separates write operations (Commands) from read operations (Queries).
 
-### Why CQRS?
+Commands change state and return a result. Queries return data and cause no side effects.
+
 ```
-CQRS = Command Query Responsibility Segregation
-
-Traditional Approach:
-  POST /api/tickets → CreateTicket method
-  GET  /api/tickets → GetTickets method
-  PUT  /api/tickets/{id} → UpdateTicket method
-  ❌ All logic mixed in one controller
-
-CQRS Approach:
-  POST /api/tickets → CreateTicketCommand (MediatR handler)
-  GET  /api/tickets → GetTicketsQuery (MediatR handler)
-  PUT  /api/tickets/{id} → UpdateTicketCommand (MediatR handler)
-  ✅ Clear separation of concerns
+Commands (write)            Queries (read)
+CreateTicketCommand         GetTicketsQuery
+UpdateTicketCommand         GetTicketByIdQuery
+DeleteTicketCommand         GetUsersQuery
 ```
 
-### Command vs Query
+### Command example
 
-**Commands** (Write Operations) — Return results, change state
 ```csharp
 public class CreateTicketCommand : IRequest<TicketDto>
 {
@@ -140,15 +121,13 @@ public class CreateTicketCommandHandler : IRequestHandler<CreateTicketCommand, T
 {
     public async Task<TicketDto> Handle(CreateTicketCommand request, CancellationToken ct)
     {
-        // 1. Validate
-        // 2. Create entity
-        // 3. Save to DB
-        // 4. Return DTO
+        // Validate, create entity, save, return DTO
     }
 }
 ```
 
-**Queries** (Read Operations) — No side effects, just return data
+### Query example
+
 ```csharp
 public class GetTicketsQuery : IRequest<List<TicketDto>>
 {
@@ -161,56 +140,54 @@ public class GetTicketsQueryHandler : IRequestHandler<GetTicketsQuery, List<Tick
 {
     public async Task<List<TicketDto>> Handle(GetTicketsQuery request, CancellationToken ct)
     {
-        // 1. Query database
-        // 2. Filter, sort, paginate
-        // 3. Return DTOs (never modify DB)
+        // Query database, filter, sort, paginate, return DTOs
     }
 }
 ```
 
+MediatR is the library that implements this pattern. Install with `dotnet add package MediatR`.
+
 ### Benefits
-- **Single Responsibility** — Handlers do one thing (read or write)
-- **Scalability** — Can optimize queries separately from commands
-- **Testability** — Easy to test: given input → expect output
-- **Event Sourcing Ready** — Foundation for audit logging
+
+- Each handler does one thing, either a read or a write.
+- Easy to test: given an input, expect an output.
+- Queries can be optimized or cached separately from commands.
 
 ### Trade-offs
-- **More Files** — 1 handler per command/query (10+ total)
-- **Learning Curve** — Team needs to understand MediatR
-- **Slight Overhead** — MediatR reflection adds milliseconds
 
-### Interview Talking Point
-> "I used CQRS to scale independently. Commands go through validation pipeline, queries can be cached. In enterprise, you might use separate read/write databases—MediatR foundation supports that."
+- One handler per command or query, which means more files.
+- Requires learning the MediatR library.
+- Adds a small amount of overhead per request.
 
 ---
 
-## 3. Entity Framework Core (ORM)
+## 3. Entity Framework Core
 
-### Decision
-Use Entity Framework Core 8 instead of raw SQL or other ORMs.
+Entity Framework Core is the ORM (Object-Relational Mapper) used to talk to the database. It converts database rows into C# objects and back.
 
-### Why EF Core?
+### Raw SQL vs Entity Framework
 
 ```csharp
-// ❌ Raw SQL (vulnerable to SQL injection)
+// Raw SQL: vulnerable to SQL injection
 var tickets = dbConnection.ExecuteQuery(
     "SELECT * FROM Tickets WHERE Priority = '" + userInput + "'"
 );
 
-// ✅ Entity Framework (parameterized, safe)
+// Entity Framework: parameterized and safe
 var tickets = await _dbContext.Tickets
     .Where(t => t.Priority == priority)
     .ToListAsync();
 ```
 
 ### Benefits
-- **Safety** — Parameterized queries prevent SQL injection
-- **Type Safety** — LINQ compiler checks column names at compile time
-- **Productivity** — Auto-generate migrations
-- **Portable** — Easy to swap SQL Server ↔ PostgreSQL ↔ MySQL
-- **Job Requirement** — Explicitly listed in posting
 
-### Entity Model Example
+- Parameterized queries prevent SQL injection.
+- LINQ queries are checked at compile time.
+- Migrations track database schema changes in version control.
+- The database provider can be changed with minimal code changes.
+
+### Entity example
+
 ```csharp
 public class Ticket
 {
@@ -227,91 +204,70 @@ public class Ticket
 
     public TicketStatus Status { get; set; } = TicketStatus.Open;
 
-    // Foreign key
     public Guid? AssignedToUserId { get; set; }
     public User AssignedToUser { get; set; }
 
-    // Soft delete
     public DateTime? DeletedAt { get; set; }
-
-    // Audit
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
 ```
 
-### Migrations (Database Version Control)
+### Migrations
+
 ```bash
-# Create migration
+# Create a migration
 dotnet ef migrations add InitialCreate
 
-# Apply to database
+# Apply it to the database
 dotnet ef database update
 
-# Rollback
+# Remove the last migration
 dotnet ef migrations remove
 ```
 
 ### Trade-offs
-- **Overhead** — Reflection adds ~1-5ms per query
-- **Learning Curve** — LINQ and navigation properties
-- **Magic** — Change tracking can be confusing
+
+- Adds a small amount of overhead per query.
+- LINQ and navigation properties take time to learn.
+- Change tracking can behave in unexpected ways if not understood.
 
 ---
 
-## 4. JWT Authentication (Stateless)
+## 4. JWT Authentication
 
-### Decision
-Use JWT Bearer tokens instead of session cookies.
+The API uses JWT (JSON Web Token) bearer tokens instead of server-side session cookies. This keeps the API stateless.
 
-### How It Works
+### Flow
 
 ```
-┌──────────────┐                    ┌──────────────────┐
-│    Client    │                    │   API Server     │
-└──────────────┘                    └──────────────────┘
-       │                                     │
-       │ 1️⃣ POST /api/auth/login             │
-       │        (email, password)            │
-       ├────────────────────────────────────>│
-       │                                     │ Verify credentials
-       │                   2️⃣ Return JWT Token│
-       │                  (eyJhbGc...)       │
-       │<────────────────────────────────────┤
-       │                                     │
-       │ Store token in localStorage         │
-       │                                     │
-       │ 3️⃣ GET /api/tickets                 │
-       │    Authorization: Bearer <token>   │
-       ├────────────────────────────────────>│
-       │                                     │ Verify signature
-       │                                     │ Check expiration
-       │                  4️⃣ Return data     │
-       │<────────────────────────────────────┤
+1. Client sends POST /api/auth/login with email and password.
+2. Server verifies credentials and returns a JWT token.
+3. Client stores the token and includes it on future requests
+   in the header: Authorization: Bearer <token>
+4. Server verifies the token signature and expiration on each request.
 ```
 
-### JWT Token Structure
+### Token structure
+
+A JWT has three parts separated by dots: a header, a payload, and a signature.
+
 ```
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.
-eyJzdWIiOiJ1c2VyLTEyMyIsImVtYWlsIjoiam9obi5kbEBleGFtcGxlLmNvbSIsImlhdCI6MTcxMzcyNzk5NH0.
-7EJB7N2SL8cZqLXVQ9oH5hXz6pQ...
-
-↓ (Base64 decode)
-
 Header:     {"alg":"HS256","typ":"JWT"}
-Payload:    {"sub":"user-123","email":"john.dl@example.com","iat":1713727994}
-Signature:  <HMAC-SHA256 with server secret>
+Payload:    {"sub":"user-123","email":"user@example.com","iat":1713727994}
+Signature:  HMAC-SHA256 hash signed with the server secret
 ```
 
 ### Benefits
-- **Stateless** — No server-side session storage needed
-- **Scalable** — Works with multiple API instances (no affinity needed)
-- **Microservices** — Token verified by any service knowing the secret
-- **Mobile-Friendly** — Works for web + mobile + SPA
+
+- Stateless: no session storage needed on the server.
+- Scalable: works across multiple API instances without shared session state.
+- Works for web, mobile, and single-page apps.
 
 ### Implementation
+
 ```csharp
-// 1️⃣ Generate token on login
+// Generate a token on login
 var tokenHandler = new JwtSecurityTokenHandler();
 var key = Encoding.ASCII.GetBytes(jwtSecret);
 var tokenDescriptor = new SecurityTokenDescriptor
@@ -324,115 +280,61 @@ var tokenDescriptor = new SecurityTokenDescriptor
     }),
     Expires = DateTime.UtcNow.AddHours(24),
     SigningCredentials = new SigningCredentials(
-        new SymmetricSecurityKey(key), 
+        new SymmetricSecurityKey(key),
         SecurityAlgorithms.HmacSha256Signature
     )
 };
 var token = tokenHandler.CreateToken(tokenDescriptor);
 return tokenHandler.WriteToken(token);
-
-// 2️⃣ Validate token in middleware
-services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.ASCII.GetBytes(jwtSecret)
-            ),
-            ValidateIssuer = false,
-            ValidateAudience = false
-        };
-    });
 ```
 
 ### Trade-offs
-- **Token Size** — Tokens are larger than session IDs
-- **No Revocation** — Can't revoke token immediately (expires in 24h)
-- **Secret Management** — Server secret must be kept secure
+
+- Tokens are larger than session IDs.
+- A token cannot be revoked before it expires.
+- The signing secret must be kept secure.
 
 ---
 
-## 5. React + TypeScript (Frontend)
+## 5. React and TypeScript
 
-### Decision
-Use React 18 + TypeScript 5 instead of vanilla JavaScript or other frameworks.
+The frontend uses React 18 with TypeScript 5.
 
-### Why React?
-```
-✅ Component reusability
-✅ Virtual DOM (efficient rendering)
-✅ Large ecosystem (libraries, tools)
-✅ Industry standard (Meta, Netflix, Airbnb)
-✅ Job posting explicitly mentions React
-```
+### Why TypeScript over plain JavaScript
 
-### Why TypeScript?
-```
-❌ JavaScript (runtime errors)
+```typescript
+// JavaScript: error only appears at runtime
 const user = getUserById(123);
-console.log(user.fullName); // Oops, property doesn't exist!
-// Error only caught at runtime → user sees broken UI
+console.log(user.fullName); // undefined, no warning
 
-✅ TypeScript (compile-time errors)
+// TypeScript: error caught at compile time
 interface User {
   id: number;
   firstName: string;
   lastName: string;
 }
 const user: User = getUserById(123);
-console.log(user.fullName); // ❌ TypeScript error before running!
-// Error caught before deploying
+console.log(user.fullName); // compiler error before running
 ```
 
-### Component Architecture Example
-```
-App
-├── Layout
-│   ├── Header (navigation, user dropdown)
-│   └── Sidebar (menu)
-├── pages/
-│   ├── TicketListPage
-│   ├── TicketDetailPage
-│   └── DashboardPage
-└── components/
-    ├── TicketTable (reusable table)
-    ├── TicketForm (reusable form)
-    ├── Modal (generic modal)
-    └── Loading Spinner (generic loading)
-```
+### State management with React Query
 
-### State Management (React Query)
 ```typescript
-// Hook that manages ticket data fetching + caching
 function useTickets(status?: TicketStatus) {
   return useQuery({
     queryKey: ['tickets', status],
     queryFn: async () => {
-      const response = await axios.get('/api/tickets', {
-        params: { status }
-      });
+      const response = await axios.get('/api/tickets', { params: { status } });
       return response.data;
     },
-    staleTime: 5 * 60 * 1000 // Cache for 5 minutes
+    staleTime: 5 * 60 * 1000 // cache for 5 minutes
   });
-}
-
-// Component using the hook
-export function TicketList() {
-  const { data: tickets, isLoading, error } = useTickets();
-  
-  if (isLoading) return <Spinner />;
-  if (error) return <Error message={error.message} />;
-  
-  return <TicketTable tickets={tickets} />;
 }
 ```
 
-### Type Safety Example
+### Type safety example
+
 ```typescript
-// Types enforced at compile time
 interface Ticket {
   id: string;
   title: string;
@@ -440,7 +342,7 @@ interface Ticket {
   status: 'Open' | 'InProgress' | 'Resolved' | 'Closed';
 }
 
-// ✅ Correct
+// Valid
 const ticket: Ticket = {
   id: '123',
   title: 'Printer broken',
@@ -448,43 +350,33 @@ const ticket: Ticket = {
   status: 'Open'
 };
 
-// ❌ Compiler error
+// Compiler error: 'URGENT' is not a valid priority
 const badTicket: Ticket = {
   id: '456',
   title: 'Network issue',
-  priority: 'URGENT', // ❌ Not in union type
-  status: 'pending'   // ❌ Not in union type
+  priority: 'URGENT',
+  status: 'pending'
 };
 ```
 
 ### Trade-offs
-- **JavaScript Overhead** — TypeScript compiles to JavaScript (adds build step)
-- **Verbose** — Types require more code than vanilla JS
-- **Learning Curve** — Developers must know both React and TypeScript
+
+- TypeScript adds a compile step.
+- Types require more code than plain JavaScript.
+- Developers need to know both React and TypeScript.
 
 ---
 
-## 6. Docker & Containerization
+## 6. Docker
 
-### Decision
-Use Docker to standardize development and deployment environments.
+Docker packages the application along with its dependencies so it runs the same way in every environment.
 
-### Problem Solved
-```
-❌ "Works on my machine"
-   Dev: Windows
-   QA: macOS
-   Prod: Linux
-   → Different results, mystery bugs
+### Problem it solves
 
-✅ Docker
-   Dev: Container with Linux + .NET 8 + SQL Server
-   QA: Same container
-   Prod: Same container
-   → Guaranteed consistency
-```
+Without Docker, an app might behave differently on a developer's Windows machine, a tester's Mac, and a Linux production server. With Docker, all three run the same container.
 
-### Docker Compose (Multi-Container)
+### docker-compose
+
 ```yaml
 version: '3.8'
 services:
@@ -492,235 +384,188 @@ services:
     image: mcr.microsoft.com/mssql/server:latest
     environment:
       SA_PASSWORD: "YourSecurePassword123!"
+      ACCEPT_EULA: "Y"
     ports:
       - "1433:1433"
-    volumes:
-      - sql-data:/var/opt/mssql
-  
+
   api:
-    build: ./backend                # Build from Dockerfile
+    build: ./backend
     depends_on:
       - sql-server
     environment:
-      ConnectionStrings__DefaultConnection: 
-        "Server=sql-server;Database=TicketDb;..."
+      ConnectionStrings__DefaultConnection: "Server=sql-server;Database=TicketDb;..."
     ports:
       - "5000:8080"
-  
+
   frontend:
     build: ./frontend
     depends_on:
       - api
     ports:
       - "3000:80"
-    environment:
-      REACT_APP_API_URL: "http://localhost:5000"
-
-volumes:
-  sql-data:
 ```
 
-### One-Command Setup
-```bash
-# Entire stack: SQL Server + API + Frontend
-docker-compose up
-
-# Everything running and connected!
-```
+Running `docker-compose up` starts the database, API, and frontend together.
 
 ### Benefits
-- **Reproducibility** — Runs identically locally, on Render, on Azure, on AWS
-- **Isolation** — Bugs in one service don't affect others
-- **Onboarding** — New developer: 1 command instead of 20-step setup guide
+
+- The same container runs locally and in the cloud.
+- Services are isolated from each other.
+- New developers can start the whole stack with one command.
 
 ### Trade-offs
-- **Disk Space** — Docker images are large (~1GB+)
-- **Performance** — Slight overhead vs. native execution
-- **Complexity** — Network between containers, volume management
+
+- Docker images take up disk space.
+- There is a small performance cost compared to running natively.
+- Networking and volumes add some complexity.
 
 ---
 
 ## 7. GitHub Actions (CI/CD)
 
-### Decision
-Use GitHub Actions for automated testing and deployment on every commit.
+GitHub Actions runs automated builds and tests on every push and pull request.
 
-### CI/CD Pipeline
+### Pipeline
+
 ```
-Developer pushes code to GitHub
-         ↓
-GitHub Actions triggered automatically
-         ↓
-┌─────────────────────────────┐
-│ 1️⃣ Build Backend (.NET)     │
-│ 2️⃣ Build Frontend (Node)    │
-│ 3️⃣ Run Backend Tests (xUnit)│
-│ 4️⃣ Run Frontend Tests       │
-│ 5️⃣ Build Docker images      │
-│ 6️⃣ Deploy to production     │
-└─────────────────────────────┘
-         ↓
-✅ All tests passed → deploy
-❌ Tests failed → block merge
+1. Build the backend (.NET)
+2. Build the frontend (Node.js)
+3. Run backend tests (xUnit)
+4. Run frontend tests (Vitest)
+5. Build Docker images
+6. Deploy if all steps pass
 ```
 
-### Workflow File (`.github/workflows/ci.yml`)
+### Workflow file
+
 ```yaml
-name: CI/CD Pipeline
+name: CI Pipeline
 
 on: [push, pull_request]
 
 jobs:
   build-test:
     runs-on: ubuntu-latest
-    
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: '8.0.x'
-      
+
       - name: Restore backend
         run: dotnet restore backend/
-      
+
       - name: Build backend
         run: dotnet build backend/
-      
+
       - name: Test backend
         run: dotnet test backend/TicketSystem.Tests/
-      
+
       - name: Setup Node 18
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-      
+
       - name: Install frontend deps
         run: cd frontend && npm ci
-      
+
       - name: Build frontend
         run: cd frontend && npm run build
-      
+
       - name: Test frontend
         run: cd frontend && npm test
-      
-      - name: Build Docker images
-        run: docker-compose build
-      
-      - name: Deploy to Render
-        run: |
-          curl -X POST https://api.render.com/deploy/...
 ```
 
 ### Benefits
-- **Automation** — No manual testing before merge
-- **Safety** — Broken code can't reach production
-- **Feedback Loop** — Developer knows if code is good in <5 minutes
-- **Audit Trail** — Every test run is logged
+
+- Tests run automatically before code is merged.
+- Broken code is caught before it reaches production.
+- Every run is logged.
 
 ### Trade-offs
-- **Setup Time** — Workflow configuration is complex
-- **CI Minutes** — GitHub provides 2000 free minutes/month
-- **Latency** — Tests take 5-10 minutes (not instant feedback)
+
+- Workflow configuration takes time to set up.
+- GitHub provides a limited number of free CI minutes per month.
+- A full run can take several minutes.
 
 ---
 
-## 8. Database Design (Soft Deletes & Audit)
+## 8. Database Design: Soft Deletes and Audit Fields
 
-### Soft Delete Pattern
+### Soft delete
+
+Instead of permanently removing a record, a soft delete marks it as deleted with a timestamp. The record stays in the database but is filtered out of normal queries.
+
 ```sql
--- ❌ Hard delete
+-- Hard delete: data is gone permanently
 DELETE FROM Tickets WHERE Id = 'abc';
--- Data is gone forever, can't recover
 
--- ✅ Soft delete
-UPDATE Tickets 
-SET DeletedAt = GETUTCDATE() 
-WHERE Id = 'abc';
--- Data still exists, marked as deleted
+-- Soft delete: data remains, marked as deleted
+UPDATE Tickets SET DeletedAt = GETUTCDATE() WHERE Id = 'abc';
 
 -- Query only active records
 SELECT * FROM Tickets WHERE DeletedAt IS NULL;
 ```
 
-### Audit Timestamps
+### Audit fields
+
 ```csharp
 public class Ticket
 {
-    // When was this record created?
     public DateTime CreatedAt { get; set; }
-    
-    // When was this record last modified?
     public DateTime UpdatedAt { get; set; }
-    
-    // When was this ticket resolved?
     public DateTime? ResolvedAt { get; set; }
-    
-    // When was this record deleted?
     public DateTime? DeletedAt { get; set; }
 }
 ```
 
-### Entity Framework Auto-Update
+### Auto-updating timestamps in EF Core
+
 ```csharp
-public class TicketDbContext : DbContext
+public override async Task<int> SaveChangesAsync(CancellationToken ct = default)
 {
-    public override async Task<int> SaveChangesAsync(CancellationToken ct = default)
+    var entries = ChangeTracker
+        .Entries<Ticket>()
+        .Where(e => e.State == EntityState.Modified);
+
+    foreach (var entry in entries)
     {
-        // Auto-update timestamps before saving
-        var entries = ChangeTracker
-            .Entries<Ticket>()
-            .Where(e => e.State == EntityState.Modified);
-        
-        foreach (var entry in entries)
-        {
-            entry.Entity.UpdatedAt = DateTime.UtcNow;
-        }
-        
-        return await base.SaveChangesAsync(ct);
+        entry.Entity.UpdatedAt = DateTime.UtcNow;
     }
+
+    return await base.SaveChangesAsync(ct);
 }
 ```
 
 ### Benefits
-- **Data Recovery** — Accidentally deleted ticket? Restore it
-- **Audit Trail** — See when changes happened
-- **Compliance** — GDPR allows "right to be forgotten" without losing history
-- **Business Logic** — Query only active records with WHERE clause
+
+- Deleted records can be recovered.
+- Changes can be traced through timestamps.
+- Supports compliance requirements without losing history.
 
 ---
 
 ## Decision Summary
 
-| Pattern | Why | Trade-off |
-|---------|-----|-----------|
-| **Clean Architecture** | Testable, maintainable, scalable | More files, setup overhead |
-| **CQRS (MediatR)** | Clear separation, single responsibility | More handlers, learning curve |
-| **Entity Framework** | Type-safe, SQL injection protection, portable | Slight performance overhead |
-| **JWT Auth** | Stateless, scalable, mobile-friendly | No token revocation, larger tokens |
-| **React + TypeScript** | Type safety, productivity, industry standard | Compilation step, verbose |
-| **Docker** | Reproducibility, consistency across environments | Disk space, performance overhead |
-| **GitHub Actions** | Automated testing, safe deployments | Setup complexity, CI minutes |
-| **Soft Deletes** | Data recovery, audit trail, compliance | Query complexity (always filter DeletedAt) |
+| Pattern | Reason | Trade-off |
+|---|---|---|
+| Clean Architecture | Testable, maintainable, scalable | More files and setup |
+| CQRS (MediatR) | Clear separation, single responsibility | More handlers, learning curve |
+| Entity Framework | Type-safe, SQL injection protection | Small performance overhead |
+| JWT Auth | Stateless, scalable | No token revocation, larger tokens |
+| React and TypeScript | Type safety, industry standard | Compile step, more verbose |
+| Docker | Consistent across environments | Disk space, performance overhead |
+| GitHub Actions | Automated testing and deployment | Setup complexity, CI minutes |
+| Soft Deletes | Data recovery, audit trail | Queries must filter deleted rows |
 
 ---
 
-## Next Steps (Scalability)
+## Possible Future Work
 
-### Phase 2 Considerations
-- **Event Sourcing** — Store all changes as events (audit trail)
-- **CQRS Full** — Separate read/write databases
-- **Microservices** — Split into independent services
-- **Message Queue** — Async processing (Hangfire, RabbitMQ)
-- **Caching** — Redis for high-traffic queries
-- **Notifications** — Email/SMS when ticket status changes
-
-### Enterprise Patterns
-- **Domain-Driven Design (DDD)** — Model around business domains
-- **Event-Driven Architecture** — Services communicate via events
-- **Saga Pattern** — Distributed transactions across services
-
----
-
-**Last Updated:** June 2026
+- Event sourcing for a full audit trail of changes.
+- Separate read and write databases (full CQRS).
+- Background job processing for notifications.
+- Caching with Redis for high-traffic queries.
+- Email or SMS notifications on ticket status changes.
