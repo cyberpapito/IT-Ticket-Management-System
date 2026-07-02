@@ -1,6 +1,7 @@
 using TicketSystem.Data;      // adjust to wherever your AppDbContext lives
 using TicketSystem.Models;
 
+
 namespace TicketSystem.Services
 {
     public class TicketService
@@ -17,7 +18,10 @@ namespace TicketSystem.Services
     string description,
     TicketPriority priority,
     Guid createdByUserId)
+
 {
+
+    
     var ticket = Ticket.Create(title, description, priority, createdByUserId);
 
     _dbContext.Tickets.Add(ticket);
@@ -26,6 +30,9 @@ namespace TicketSystem.Services
 
     return ticket;
         }
-
+            public async Task<Ticket?> GetTicketById(Guid ticketId)
+        {
+    return await _dbContext.Tickets.FindAsync(ticketId);
+        }
     }
 }
