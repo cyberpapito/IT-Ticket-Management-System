@@ -13,27 +13,19 @@ namespace TicketSystem.Services
         }
 
         public async Task<Ticket> CreateTicket(
-            string title,
-            string description,
-            TicketPriority priority,
-            Guid createdByUserId)
-        {
-            // 1. Create the ticket using your factory method
+    string title,
+    string description,
+    TicketPriority priority,
+    Guid createdByUserId)
+{
+    var ticket = Ticket.Create(title, description, priority, createdByUserId);
 
-            var ticket = Ticket.Create(title, description, priority, createdByUserId);
+    _dbContext.Tickets.Add(ticket);
 
-            // 2. Stage it in the DbContext
+    await _dbContext.SaveChangesAsync();
 
-            _dbContext.Tickets.Add(ticket);
-        
-            // 3. Save changes to the database (remember: await)
-    
-            await _dbContext.SaveChangesAsync();
-
-            // 4. Return the created ticket
-            return ticket;
-
-        }   
+    return ticket;
+        }
 
     }
 }
