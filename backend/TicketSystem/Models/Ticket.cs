@@ -54,5 +54,14 @@ namespace TicketSystem.Models
             Status = TicketStatus.Resolved;
             ResolvedAt = DateTimeOffset.UtcNow;
         }
+// Business rule: only resolved tickets can be closed
+public void Close()
+        {
+    if (Status != TicketStatus.Resolved)
+        throw new InvalidOperationException(
+            $"Cannot close a {Status} ticket. Tickets must be resolved before closing.");
+
+    Status = TicketStatus.Closed;
+        }   
     }
 }
