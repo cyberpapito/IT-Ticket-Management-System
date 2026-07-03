@@ -11,6 +11,7 @@ namespace TicketSystem.Models
         public Guid CreatedByUserId { get; private set; }
         public DateTimeOffset CreatedAt { get; private set; }
         public DateTimeOffset? ResolvedAt { get; private set; }
+        public string? ResolutionSummary { get; private set; }
 
         // Factory method - only way to create a new ticket
         public static Ticket Create(
@@ -62,6 +63,29 @@ public void Close()
             $"Cannot close a {Status} ticket. Tickets must be resolved before closing.");
 
     Status = TicketStatus.Closed;
-        }   
+        }
+
+
+
+    // Business rules: only assigned, non-closed tickets can be resolved,
+// and a resolution summary is required for the audit record
+public void MarkResolved(string resolutionSummary)
+{
+    if (Status == TicketStatus.Closed)
+        throw new InvalidOperationException("Cannot resolve a ticket that is already closed.");
+
+    if (AssignedToUserId is null)
+        throw new InvalidOperationException(
+            "Cannot resolve an unassigned ticket. Assign a technician before resolving.");
+
+    if (string.IsNullOrWhiteSpace(resolutionSummary))
+        throw new ArgumentException("A resolution summary is required to resolve a ticket.");
+
+    Status = TicketStatus.Resolved;
+    ResolutionSummary = resolutionSummary.Trim();
+    ResolvedAt = DateTimeOffset.UtcNow;
+}
+
+
     }
 }
