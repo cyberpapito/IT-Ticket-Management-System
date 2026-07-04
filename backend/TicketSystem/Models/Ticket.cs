@@ -85,7 +85,19 @@ public void MarkResolved(string resolutionSummary)
     ResolutionSummary = resolutionSummary.Trim();
     ResolvedAt = DateTimeOffset.UtcNow;
 }
+// Business rule: work can only start on an assigned, open ticket
+public void StartWork()
+{
+    if (Status != TicketStatus.Open)
+        throw new InvalidOperationException(
+            $"Cannot start work on a {Status} ticket. Only Open tickets can move to In Progress.");
 
+    if (AssignedToUserId is null)
+        throw new InvalidOperationException(
+            "Cannot start work on an unassigned ticket. Assign a technician first.");
+
+    Status = TicketStatus.InProgress;
+}
 
     }
 }
