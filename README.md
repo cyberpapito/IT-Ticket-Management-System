@@ -70,3 +70,15 @@ Interactive documentation is available at `/swagger` when the API is running.
 ---
 
 ## Project structure
+
+IT-Ticket-Management-System/
+├── backend/TicketSystem/
+│   ├── Controllers/        
+│   ├── Services/          
+│   ├── Models/            
+│   ├── DTOs/              
+│   ├── Data/              
+│   ├── Migrations/         
+│   └── Program.cs          
+│
+└── README.md
