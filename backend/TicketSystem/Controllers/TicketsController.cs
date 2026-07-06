@@ -38,5 +38,12 @@ namespace TicketSystem.Controllers
 
             return Ok(ticket);
         }
+        [HttpGet]
+        public async Task<ActionResult<List<Ticket>>> GetAllTickets()
+        {
+            var tickets = await _ticketService.GetAllTickets();
+            return Ok(tickets);
+        }
+
     }
 }
