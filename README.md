@@ -61,7 +61,7 @@ Interactive documentation is available at `/swagger` when the API is running.
 |--------|----------|--------|
 | POST   | `/api/tickets`        | Working — creates a ticket, returns 201 with location header |
 | GET    | `/api/tickets/{id}`   | Working — returns 200, or 404 if not found |
-| GET    | `/api/tickets`        | Planned — list with status/priority filtering |
+| GET    | `/api/tickets`        | Working — list with status/priority filtering |
 | PUT    | `/api/tickets/{id}`   | Planned |
 | DELETE | `/api/tickets/{id}`   | Planned — soft delete |
 | GET    | `/api/tickets/{id}/notes` | Planned |
