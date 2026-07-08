@@ -45,30 +45,24 @@ namespace TicketSystem.Models
             AssignedToUserId = technicianId;
         }
 
-        // Business rule: can only resolve non-closed tickets
-        public void MarkResolved()
-        {
-            if (Status == TicketStatus.Closed)
-                throw new InvalidOperationException(
-                    "Cannot resolve a ticket that is already closed.");
 
-            Status = TicketStatus.Resolved;
-            ResolvedAt = DateTimeOffset.UtcNow;
-        }
-// Business rule: only resolved tickets can be closed
-public void Close()
-        {
-    if (Status != TicketStatus.Resolved)
+         // Business rule: work can only start on an assigned, open ticket
+
+        public void StartWork()
+{
+    if (Status != TicketStatus.Open)
         throw new InvalidOperationException(
-            $"Cannot close a {Status} ticket. Tickets must be resolved before closing.");
+            $"Cannot start work on a {Status} ticket. Only Open tickets can move to In Progress.");
 
-    Status = TicketStatus.Closed;
-        }
+    if (AssignedToUserId is null)
+        throw new InvalidOperationException(
+            "Cannot start work on an unassigned ticket. Assign a technician first.");
 
+    Status = TicketStatus.InProgress;
+}
 
-
-    // Business rules: only assigned, non-closed tickets can be resolved,
-// and a resolution summary is required for the audit record
+        // Business rules: only assigned, non-closed tickets can be resolved,
+        // and a resolution summary is required for the audit record
 public void MarkResolved(string resolutionSummary)
 {
     if (Status == TicketStatus.Closed)
@@ -85,19 +79,16 @@ public void MarkResolved(string resolutionSummary)
     ResolutionSummary = resolutionSummary.Trim();
     ResolvedAt = DateTimeOffset.UtcNow;
 }
-// Business rule: work can only start on an assigned, open ticket
-public void StartWork()
-{
-    if (Status != TicketStatus.Open)
-        throw new InvalidOperationException(
-            $"Cannot start work on a {Status} ticket. Only Open tickets can move to In Progress.");
 
-    if (AssignedToUserId is null)
+        // Business rule: only resolved tickets can be closed
+public void Close()
+        {
+    if (Status != TicketStatus.Resolved)
         throw new InvalidOperationException(
-            "Cannot start work on an unassigned ticket. Assign a technician first.");
+            $"Cannot close a {Status} ticket. Tickets must be resolved before closing.");
 
-    Status = TicketStatus.InProgress;
-}
+    Status = TicketStatus.Closed;
+        }
 
     }
 }

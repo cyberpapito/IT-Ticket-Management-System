@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using TicketSystem.Data;      // adjust to wherever your AppDbContext lives
+using TicketSystem.Data;
 using TicketSystem.Models;
 
 
@@ -21,27 +21,27 @@ namespace TicketSystem.Services
     TicketPriority priority,
     Guid createdByUserId)
 
-{
-
-
-    
-    var ticket = Ticket.Create(title, description, priority, createdByUserId);
-
-    _dbContext.Tickets.Add(ticket);
-
-    await _dbContext.SaveChangesAsync();
-
-    return ticket;
-        }
-            public async Task<Ticket?> GetTicketById(Guid ticketId)
         {
-    return await _dbContext.Tickets.FindAsync(ticketId);
+
+
+
+            var ticket = Ticket.Create(title, description, priority, createdByUserId);
+
+            _dbContext.Tickets.Add(ticket);
+
+            await _dbContext.SaveChangesAsync();
+
+            return ticket;
+        }
+        public async Task<Ticket?> GetTicketById(Guid ticketId)
+        {
+            return await _dbContext.Tickets.FindAsync(ticketId);
         }
 
-            public async Task<List<Ticket>> GetAllTickets()
-{
-    return await _dbContext.Tickets.ToListAsync();
-}
+        public async Task<List<Ticket>> GetAllTickets()
+        {
+            return await _dbContext.Tickets.ToListAsync();
+        }
 
 
 
