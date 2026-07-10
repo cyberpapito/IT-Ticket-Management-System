@@ -4,10 +4,9 @@
 
 namespace TicketSystem.Migrations
 {
-    /// <inheritdoc />
-    public partial class AddResolutionToTicket : Migration
+        public partial class AddResolutionToTicket : Migration
     {
-        /// <inheritdoc />
+       
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<string>(
@@ -17,8 +16,7 @@ namespace TicketSystem.Migrations
                 nullable: true);
         }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
+                protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
                 name: "ResolutionSummary",
