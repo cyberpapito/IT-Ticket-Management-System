@@ -45,5 +45,14 @@ namespace TicketSystem.Controllers
             return Ok(tickets);
         }
 
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteTicket(Guid id)
+        {
+            var deletedTicket = await _ticketService.SoftDeleteTicket(id);
+            if (deletedTicket is null)
+                return NotFound();
+
+            return NoContent();
+        }
     }
 }

@@ -11,7 +11,9 @@ namespace TicketSystem.Models
         public Guid CreatedByUserId { get; private set; }
         public DateTimeOffset CreatedAt { get; private set; }
         public DateTimeOffset? ResolvedAt { get; private set; }
+        public DateTimeOffset? DeletedAt { get; private set; }  
         public string? ResolutionSummary { get; private set; }
+        
 
         // Factory method - only way to create a new ticket
         public static Ticket Create(
@@ -78,6 +80,15 @@ public void MarkResolved(string resolutionSummary)
     Status = TicketStatus.Resolved;
     ResolutionSummary = resolutionSummary.Trim();
     ResolvedAt = DateTimeOffset.UtcNow;
+}
+
+        // Business rule: Can't delete a ticket that is already deleted
+public void MarkDeleted()
+{
+    if (DeletedAt is not null)
+        throw new InvalidOperationException("Ticket is already deleted.");
+
+    DeletedAt = DateTimeOffset.UtcNow;
 }
 
         // Business rule: only resolved tickets can be closed

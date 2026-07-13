@@ -43,6 +43,16 @@ namespace TicketSystem.Services
             return await _dbContext.Tickets.ToListAsync();
         }
 
+        public async Task<Ticket?> SoftDeleteTicket(Guid ticketId)
+        {
+            var ticket = await _dbContext.Tickets.FindAsync(ticketId);
+            if (ticket is null)
+             return null;
+
+            ticket.MarkDeleted();
+            await _dbContext.SaveChangesAsync();
+            return ticket;
+        }
 
 
     }
