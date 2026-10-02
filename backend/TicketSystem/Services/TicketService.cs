@@ -43,6 +43,8 @@ namespace TicketSystem.Services
             return await _dbContext.Tickets.ToListAsync();
         }
 
+        // Returns null for unknown and already-deleted tickets alike: the query filter
+        // hides deleted ones, so a second DELETE is a 404 rather than a domain error.
         public async Task<Ticket?> SoftDeleteTicket(Guid ticketId)
         {
             var ticket = await _dbContext.Tickets.FindAsync(ticketId);

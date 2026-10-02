@@ -42,6 +42,10 @@ namespace TicketSystem.Data
 
                 entity.Property(t => t.AssignedToUserId)
                     .IsRequired(false);
+
+                // Soft-deleted tickets are hidden from every query; use IgnoreQueryFilters()
+                // when the audit history is actually needed.
+                entity.HasQueryFilter(t => t.DeletedAt == null);
             });
         }
     }
