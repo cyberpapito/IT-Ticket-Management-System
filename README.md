@@ -34,3 +34,15 @@ Rules are enforced on the `Ticket` entity itself, not in controllers or services
 
 The backend is a single ASP.NET Core project with a strict **Controller → Service → Entity → DbContext** flow: controllers translate HTTP in and out and nothing more, the service orchestrates operations, business rules live on the entity, and EF Core handles persistence. 
 
+
+## Testing
+
+`backend/TicketSystem.Tests` is an xUnit project with two layers:
+
+- **Entity tests** (`TicketTests`) cover every business rule on `Ticket`: creation, assignment, starting work, resolving, closing and soft delete, including the transitions that must be rejected.
+- **Service tests** (`TicketServiceTests`) run `TicketService` against EF Core's in-memory provider, so they need no SQL Server. Each test gets its own database and reads back through a fresh context to check what was actually saved.
+
+```bash
+cd backend/TicketSystem.Tests
+dotnet test
+```
