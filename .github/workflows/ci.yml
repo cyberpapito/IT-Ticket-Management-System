@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.0.x
+
+      # Builds the API through its project reference, then runs the xUnit suite. The tests use
+      # EF Core's in-memory provider, so no SQL Server is needed here.
+      - name: Test
+        run: dotnet test backend/TicketSystem.Tests --configuration Release
+
+      # A model change without a migration builds and passes the in-memory tests, then fails
+      # against SQL Server (as the DeletedAt column once did). This fails the build instead.
+      - name: No model changes without a migration
+        run: |
+          dotnet tool install --global dotnet-ef --version 9.0.20
+          dotnet ef migrations has-pending-model-changes --project backend/TicketSystem
