@@ -2,6 +2,11 @@ namespace TicketSystem.Models
 {
     public class Ticket
     {
+        // Column sizes in the database (AppDbContext uses these), enforced here so an oversized
+        // value is rejected as invalid input instead of failing on save.
+        public const int TitleMaxLength = 255;
+        public const int DescriptionMaxLength = 2000;
+
         public Guid Id { get; private set; }
         public string Title { get; private set; } = string.Empty;
         public string Description { get; private set; } = string.Empty;
@@ -25,11 +30,20 @@ namespace TicketSystem.Models
             if (string.IsNullOrWhiteSpace(title))
                 throw new ArgumentException("Title cannot be empty");
 
+            title = title.Trim();
+            description = description?.Trim() ?? string.Empty;
+
+            if (title.Length > TitleMaxLength)
+                throw new ArgumentException($"Title cannot be longer than {TitleMaxLength} characters");
+
+            if (description.Length > DescriptionMaxLength)
+                throw new ArgumentException($"Description cannot be longer than {DescriptionMaxLength} characters");
+
             return new Ticket
             {
                 Id = Guid.NewGuid(),
-                Title = title.Trim(),
-                Description = description?.Trim() ?? string.Empty,
+                Title = title,
+                Description = description,
                 Priority = priority,
                 Status = TicketStatus.Open,
                 CreatedByUserId = createdByUserId,

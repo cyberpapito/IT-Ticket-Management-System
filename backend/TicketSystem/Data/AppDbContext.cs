@@ -21,10 +21,10 @@ namespace TicketSystem.Data
 
                 entity.Property(t => t.Title)
                     .IsRequired()
-                    .HasMaxLength(255);
+                    .HasMaxLength(Ticket.TitleMaxLength);
 
                 entity.Property(t => t.Description)
-                    .HasMaxLength(2000);
+                    .HasMaxLength(Ticket.DescriptionMaxLength);
 
                 entity.Property(t => t.Priority)
                     .IsRequired()
