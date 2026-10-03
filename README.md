@@ -16,6 +16,7 @@ Currently working, verified end-to-end via Swagger:
 Rules are enforced on the `Ticket` entity itself, not in controllers or services, so they cannot be bypassed regardless of the caller:
 
 - Tickets can only be constructed through the `Ticket.Create()` factory, which guarantees a valid initial state. An invalid ticket is unrepresentable, not merely validated.
+- A title must be non-blank and at most 255 characters, and a description at most 2,000, measured after trimming. The limits are constants on `Ticket` that `AppDbContext` also uses for the column sizes, so they can't drift apart; an over-long or blank title is a 400 from `POST /api/tickets`, never a database error.
 - A ticket cannot be resolved unless it has an assigned technician and a written resolution summary, and it can only be resolved once — resolving again would overwrite the original summary and `ResolvedAt`.
 - A ticket cannot be soft-deleted twice — the original `DeletedAt` timestamp is preserved because overwriting it would falsify the audit trail.
 

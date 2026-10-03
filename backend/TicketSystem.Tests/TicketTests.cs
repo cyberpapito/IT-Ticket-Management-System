@@ -70,6 +70,42 @@ namespace TicketSystem.Tests
                 Ticket.Create(title!, "description", TicketPriority.Low, Creator));
         }
 
+        [Fact]
+        public void Create_AcceptsTitleAtMaxLength()
+        {
+            var title = new string('a', Ticket.TitleMaxLength);
+
+            Assert.Equal(title, Ticket.Create(title, "desc", TicketPriority.Low, Creator).Title);
+        }
+
+        [Fact]
+        public void Create_RejectsTitleOverMaxLength()
+        {
+            var title = new string('a', Ticket.TitleMaxLength + 1);
+
+            var ex = Assert.Throws<ArgumentException>(() => Ticket.Create(title, "desc", TicketPriority.Low, Creator));
+            Assert.Equal($"Title cannot be longer than {Ticket.TitleMaxLength} characters", ex.Message);
+        }
+
+        [Fact]
+        public void Create_MeasuresTitleAfterTrimming()
+        {
+            var title = "  " + new string('a', Ticket.TitleMaxLength) + "  ";
+
+            Assert.Equal(Ticket.TitleMaxLength, Ticket.Create(title, "desc", TicketPriority.Low, Creator).Title.Length);
+        }
+
+        [Fact]
+        public void Create_AcceptsDescriptionAtMaxLengthAndRejectsLonger()
+        {
+            var atMax = new string('d', Ticket.DescriptionMaxLength);
+            Assert.Equal(atMax, Ticket.Create("Title", atMax, TicketPriority.Low, Creator).Description);
+
+            var tooLong = atMax + "d";
+            var ex = Assert.Throws<ArgumentException>(() => Ticket.Create("Title", tooLong, TicketPriority.Low, Creator));
+            Assert.Equal($"Description cannot be longer than {Ticket.DescriptionMaxLength} characters", ex.Message);
+        }
+
         // AssignTo
 
         [Fact]
