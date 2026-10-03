@@ -5,7 +5,10 @@ namespace TicketSystem.Tests
     public class TicketTests
     {
         private static readonly Guid Creator = Guid.NewGuid();
-        private static readonly Guid Technician = Guid.NewGuid();
+        private static readonly User Technician = User.Create("Tech One", "tech1@example.com", UserRole.Technician);
+
+        private static User OtherTechnician() =>
+            User.Create("Tech Two", "tech2@example.com", UserRole.Technician);
 
         private static Ticket NewTicket() =>
             Ticket.Create("Printer offline", "3rd floor printer shows offline", TicketPriority.Medium, Creator);
@@ -115,16 +118,18 @@ namespace TicketSystem.Tests
 
             ticket.AssignTo(Technician);
 
-            Assert.Equal(Technician, ticket.AssignedToUserId);
+            Assert.Equal(Technician.Id, ticket.AssignedToUserId);
             Assert.Equal(TicketStatus.Open, ticket.Status);
         }
 
         [Fact]
-        public void AssignTo_RejectsEmptyTechnicianId()
+        public void AssignTo_RejectsSomeoneWhoIsNotATechnician()
         {
             var ticket = NewTicket();
+            var requester = User.Create("John Doe", "john.doe@example.com", UserRole.User);
 
-            Assert.Throws<ArgumentException>(() => ticket.AssignTo(Guid.Empty));
+            var ex = Assert.Throws<ArgumentException>(() => ticket.AssignTo(requester));
+            Assert.Contains("not a technician", ex.Message);
             Assert.Null(ticket.AssignedToUserId);
         }
 
@@ -132,12 +137,12 @@ namespace TicketSystem.Tests
         public void AssignTo_CanReassignAnOpenTicket()
         {
             var ticket = NewTicket();
-            var other = Guid.NewGuid();
+            var other = OtherTechnician();
 
             ticket.AssignTo(Technician);
             ticket.AssignTo(other);
 
-            Assert.Equal(other, ticket.AssignedToUserId);
+            Assert.Equal(other.Id, ticket.AssignedToUserId);
         }
 
         [Fact]
@@ -147,8 +152,8 @@ namespace TicketSystem.Tests
             ticket.AssignTo(Technician);
             ticket.StartWork();
 
-            Assert.Throws<InvalidOperationException>(() => ticket.AssignTo(Guid.NewGuid()));
-            Assert.Equal(Technician, ticket.AssignedToUserId);
+            Assert.Throws<InvalidOperationException>(() => ticket.AssignTo(OtherTechnician()));
+            Assert.Equal(Technician.Id, ticket.AssignedToUserId);
         }
 
         [Fact]
@@ -156,7 +161,7 @@ namespace TicketSystem.Tests
         {
             var ticket = ResolvedTicket();
 
-            Assert.Throws<InvalidOperationException>(() => ticket.AssignTo(Guid.NewGuid()));
+            Assert.Throws<InvalidOperationException>(() => ticket.AssignTo(OtherTechnician()));
         }
 
         // StartWork
@@ -346,7 +351,7 @@ namespace TicketSystem.Tests
             ticket.Close();
 
             Assert.Equal(TicketStatus.Closed, ticket.Status);
-            Assert.Equal(Technician, ticket.AssignedToUserId);
+            Assert.Equal(Technician.Id, ticket.AssignedToUserId);
             Assert.Equal("Reinstalled driver", ticket.ResolutionSummary);
             Assert.NotNull(ticket.ResolvedAt);
         }

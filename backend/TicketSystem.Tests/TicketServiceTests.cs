@@ -15,13 +15,65 @@ namespace TicketSystem.Tests
                 .UseInMemoryDatabase(Guid.NewGuid().ToString())
                 .Options;
 
+        // Loads the users the AddUsers migration seeds (Adrian Rodriguez, John Doe, Unknown).
+        public TicketServiceTests()
+        {
+            using var context = new AppDbContext(_options);
+            context.Database.EnsureCreated();
+        }
+
         private AppDbContext NewContext() => new(_options);
 
         private async Task<Ticket> Seed(string title = "Laptop won't boot")
         {
             using var context = NewContext();
             return await new TicketService(context)
-                .CreateTicket(title, "Black screen after update", TicketPriority.High, Guid.NewGuid());
+                .CreateTicket(title, "Black screen after update", TicketPriority.High, SeedUsers.JohnDoeId);
+        }
+
+        [Fact]
+        public async Task SeededUsersAreThere()
+        {
+            using var context = NewContext();
+            var users = await context.Users.OrderBy(u => u.Name).ToListAsync();
+
+            Assert.Equal(["Adrian Rodriguez", "John Doe", "Unknown (pre-users)"], users.Select(u => u.Name));
+            Assert.Equal(UserRole.Technician, users.Single(u => u.Id == SeedUsers.AdrianRodriguezId).Role);
+            Assert.Equal(UserRole.User, users.Single(u => u.Id == SeedUsers.JohnDoeId).Role);
+        }
+
+        [Fact]
+        public async Task CreateTicket_UnknownCreatorThrowsAndSavesNothing()
+        {
+            using (var context = NewContext())
+            {
+                var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+                    new TicketService(context).CreateTicket("Title", "desc", TicketPriority.Low, Guid.NewGuid()));
+                Assert.StartsWith("No user with id", ex.Message);
+            }
+
+            using var check = NewContext();
+            Assert.Empty(await check.Tickets.IgnoreQueryFilters().ToListAsync());
+        }
+
+        [Fact]
+        public async Task AssignTicket_OnlyToAnExistingTechnician()
+        {
+            var created = await Seed();
+
+            using (var context = NewContext())
+            {
+                var service = new TicketService(context);
+                await Assert.ThrowsAsync<ArgumentException>(() => service.AssignTicket(created.Id, Guid.NewGuid()));
+                await Assert.ThrowsAsync<ArgumentException>(() => service.AssignTicket(created.Id, SeedUsers.JohnDoeId));
+                Assert.Null(await service.AssignTicket(Guid.NewGuid(), SeedUsers.AdrianRodriguezId));  // unknown ticket
+            }
+
+            using (var context = NewContext())
+            {
+                var assigned = await new TicketService(context).AssignTicket(created.Id, SeedUsers.AdrianRodriguezId);
+                Assert.Equal(SeedUsers.AdrianRodriguezId, assigned!.AssignedToUserId);
+            }
         }
 
         [Fact]
