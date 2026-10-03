@@ -54,9 +54,12 @@ namespace TicketSystem.Models
         // Business rule: can only assign open tickets
         public void AssignTo(Guid technicianId)
         {
+            if (technicianId == Guid.Empty)
+                throw new ArgumentException("A technician id is required.");
+
             if (Status != TicketStatus.Open)
                 throw new InvalidOperationException(
-                    $"Cannot assign a {Status} ticket. Only Open tickets can be assigned.");
+                    $"Cannot assign a ticket that is {Status}. Only Open tickets can be assigned.");
 
             AssignedToUserId = technicianId;
         }
@@ -68,7 +71,7 @@ namespace TicketSystem.Models
 {
     if (Status != TicketStatus.Open)
         throw new InvalidOperationException(
-            $"Cannot start work on a {Status} ticket. Only Open tickets can move to In Progress.");
+            $"Cannot start work on a ticket that is {Status}. Only Open tickets can move to In Progress.");
 
     if (AssignedToUserId is null)
         throw new InvalidOperationException(
@@ -111,7 +114,7 @@ public void Close()
         {
     if (Status != TicketStatus.Resolved)
         throw new InvalidOperationException(
-            $"Cannot close a {Status} ticket. Tickets must be resolved before closing.");
+            $"Cannot close a ticket that is {Status}. Tickets must be resolved before closing.");
 
     Status = TicketStatus.Closed;
         }
