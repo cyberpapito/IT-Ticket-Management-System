@@ -60,6 +60,52 @@ namespace TicketSystem.Controllers
             return Ok(tickets);
         }
 
+        [HttpPost("{id}/assign")]
+        public Task<ActionResult<Ticket>> AssignTicket(Guid id, AssignTicketRequest request) =>
+            ApplyWorkflowStep(() => _ticketService.AssignTicket(id, request.TechnicianId));
+
+        [HttpPost("{id}/start")]
+        public Task<ActionResult<Ticket>> StartWork(Guid id) =>
+            ApplyWorkflowStep(() => _ticketService.StartWork(id));
+
+        [HttpPost("{id}/resolve")]
+        public Task<ActionResult<Ticket>> ResolveTicket(Guid id, ResolveTicketRequest request) =>
+            ApplyWorkflowStep(() => _ticketService.ResolveTicket(id, request.ResolutionSummary));
+
+        [HttpPost("{id}/close")]
+        public Task<ActionResult<Ticket>> CloseTicket(Guid id) =>
+            ApplyWorkflowStep(() => _ticketService.CloseTicket(id));
+
+        // The entity decides whether a step is allowed; this only translates its answer to HTTP:
+        // 404 for an unknown ticket, 409 for a step its current state doesn't allow (e.g. closing
+        // an Open ticket), 400 for bad input (e.g. a blank resolution summary).
+        private async Task<ActionResult<Ticket>> ApplyWorkflowStep(Func<Task<Ticket?>> step)
+        {
+            try
+            {
+                var ticket = await step();
+                return ticket is null ? NotFound() : Ok(ticket);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new ProblemDetails
+                {
+                    Status = StatusCodes.Status409Conflict,
+                    Title = "Not allowed in the ticket's current state",
+                    Detail = ex.Message
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "Invalid request",
+                    Detail = ex.Message
+                });
+            }
+        }
+
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteTicket(Guid id)
         {

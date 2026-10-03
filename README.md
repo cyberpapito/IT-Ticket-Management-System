@@ -10,6 +10,13 @@ Currently working, verified end-to-end via Swagger:
 - Retrieve a ticket by id (`GET /api/tickets/{id}`), with a 404 for unknown or deleted ids
 - List all tickets (`GET /api/tickets`), returning 200 with an empty array when no tickets exist — an empty list is an answer, not an error. Deleted tickets are not listed
 - Soft-delete a ticket (`DELETE /api/tickets/{id}`), returning 204 — deletion stamps a `DeletedAt` timestamp rather than removing the row, so the audit history survives. Deleting it again returns 404, like any ticket that doesn't exist
+- Move a ticket through its workflow, each returning 200 with the updated ticket:
+  - `POST /api/tickets/{id}/assign` with `{"technicianId": "…"}` (Open tickets only; an empty id is a 400)
+  - `POST /api/tickets/{id}/start` (Open → In Progress; needs an assigned technician)
+  - `POST /api/tickets/{id}/resolve` with `{"resolutionSummary": "…"}` (needs a technician and a summary; once only)
+  - `POST /api/tickets/{id}/close` (Resolved → Closed)
+
+  The entity decides whether a step is allowed; the controller only translates its answer. A step the ticket's current state doesn't allow (closing an Open ticket, starting unassigned work, resolving twice) is a **409 Conflict** with the reason, bad input is a **400**, and an unknown or deleted ticket is a **404**. A rejected step saves nothing.
 
 ## Business rules
 

@@ -120,6 +120,15 @@ namespace TicketSystem.Tests
         }
 
         [Fact]
+        public void AssignTo_RejectsEmptyTechnicianId()
+        {
+            var ticket = NewTicket();
+
+            Assert.Throws<ArgumentException>(() => ticket.AssignTo(Guid.Empty));
+            Assert.Null(ticket.AssignedToUserId);
+        }
+
+        [Fact]
         public void AssignTo_CanReassignAnOpenTicket()
         {
             var ticket = NewTicket();
