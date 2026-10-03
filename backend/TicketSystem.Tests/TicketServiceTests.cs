@@ -95,19 +95,21 @@ namespace TicketSystem.Tests
             Assert.Equal(new[] { a.Id, b.Id }.OrderBy(i => i), ids.OrderBy(i => i));
         }
 
+        private async Task Delete(Guid id)
+        {
+            using var context = NewContext();
+            Assert.NotNull(await new TicketService(context).SoftDeleteTicket(id));
+        }
+
         [Fact]
         public async Task SoftDeleteTicket_StampsDeletedAtAndKeepsRow()
         {
             var created = await Seed();
 
-            using (var context = NewContext())
-            {
-                var deleted = await new TicketService(context).SoftDeleteTicket(created.Id);
-                Assert.NotNull(deleted);
-            }
+            await Delete(created.Id);
 
             using var check = NewContext();
-            var stored = await check.Tickets.SingleAsync();
+            var stored = await check.Tickets.IgnoreQueryFilters().SingleAsync();
             Assert.Equal(created.Id, stored.Id);
             Assert.NotNull(stored.DeletedAt);
         }
@@ -120,23 +122,46 @@ namespace TicketSystem.Tests
         }
 
         [Fact]
-        public async Task SoftDeleteTicket_TwiceThrowsAndKeepsOriginalTimestamp()
+        public async Task SoftDeleteTicket_TwiceReturnsNullAndKeepsOriginalTimestamp()
         {
             var created = await Seed();
+            await Delete(created.Id);
             DateTimeOffset? original;
             using (var context = NewContext())
             {
-                original = (await new TicketService(context).SoftDeleteTicket(created.Id))!.DeletedAt;
+                original = (await context.Tickets.IgnoreQueryFilters().SingleAsync()).DeletedAt;
             }
 
             using (var context = NewContext())
             {
-                await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                    new TicketService(context).SoftDeleteTicket(created.Id));
+                Assert.Null(await new TicketService(context).SoftDeleteTicket(created.Id));
             }
 
             using var check = NewContext();
-            Assert.Equal(original, (await check.Tickets.SingleAsync()).DeletedAt);
+            Assert.Equal(original, (await check.Tickets.IgnoreQueryFilters().SingleAsync()).DeletedAt);
+        }
+
+        [Fact]
+        public async Task GetTicketById_ReturnsNullForDeletedTicket()
+        {
+            var created = await Seed();
+            await Delete(created.Id);
+
+            using var context = NewContext();
+            Assert.Null(await new TicketService(context).GetTicketById(created.Id));
+        }
+
+        [Fact]
+        public async Task GetAllTickets_ExcludesDeletedTickets()
+        {
+            var kept = await Seed("Keep me");
+            var deleted = await Seed("Delete me");
+            await Delete(deleted.Id);
+
+            using var context = NewContext();
+            var tickets = await new TicketService(context).GetAllTickets();
+
+            Assert.Equal(kept.Id, Assert.Single(tickets).Id);
         }
     }
 }

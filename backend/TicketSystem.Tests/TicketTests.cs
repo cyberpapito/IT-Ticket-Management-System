@@ -210,6 +210,18 @@ namespace TicketSystem.Tests
             Assert.Equal("Power-cycled the printer", ticket.ResolutionSummary);
         }
 
+        [Fact]
+        public void MarkResolved_RejectsResolvedTicketAndKeepsOriginalResolution()
+        {
+            var ticket = ResolvedTicket();
+            var resolvedAt = ticket.ResolvedAt;
+
+            Assert.Throws<InvalidOperationException>(() => ticket.MarkResolved("Different story"));
+            Assert.Equal(TicketStatus.Resolved, ticket.Status);
+            Assert.Equal("Power-cycled the printer", ticket.ResolutionSummary);
+            Assert.Equal(resolvedAt, ticket.ResolvedAt);
+        }
+
         // Close
 
         [Fact]

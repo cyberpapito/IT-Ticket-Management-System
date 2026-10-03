@@ -63,12 +63,13 @@ namespace TicketSystem.Models
     Status = TicketStatus.InProgress;
 }
 
-        // Business rules: only assigned, non-closed tickets can be resolved,
-        // and a resolution summary is required for the audit record
+        // Business rules: only assigned, unresolved tickets can be resolved,
+        // and a resolution summary is required for the audit record.
+        // Resolving twice would overwrite the original summary and ResolvedAt.
 public void MarkResolved(string resolutionSummary)
 {
-    if (Status == TicketStatus.Closed)
-        throw new InvalidOperationException("Cannot resolve a ticket that is already closed.");
+    if (Status is TicketStatus.Resolved or TicketStatus.Closed)
+        throw new InvalidOperationException($"Cannot resolve a ticket that is already {Status}.");
 
     if (AssignedToUserId is null)
         throw new InvalidOperationException(

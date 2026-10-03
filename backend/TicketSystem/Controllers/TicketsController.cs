@@ -19,11 +19,26 @@ namespace TicketSystem.Controllers
         [HttpPost]
         public async Task<ActionResult<Ticket>> CreateTicket(CreateTicketRequest request)
         {
-            var ticket = await _ticketService.CreateTicket(
-                request.Title,
-                request.Description,
-                request.Priority,
-                request.CreatedByUserId);
+            Ticket ticket;
+            try
+            {
+                ticket = await _ticketService.CreateTicket(
+                    request.Title,
+                    request.Description,
+                    request.Priority,
+                    request.CreatedByUserId);
+            }
+            // Ticket.Create rejects invalid input (e.g. a blank title); that's the caller's
+            // mistake, so it's a 400, not an unhandled 500
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "Invalid ticket",
+                    Detail = ex.Message
+                });
+            }
 
             return CreatedAtAction(nameof(GetTicketById), new { id = ticket.Id }, ticket);
         }
