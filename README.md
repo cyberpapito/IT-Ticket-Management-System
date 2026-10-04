@@ -18,12 +18,15 @@ Currently working, verified end-to-end via Swagger:
 
   The entity decides whether a step is allowed; the controller only translates its answer. A step the ticket's current state doesn't allow (closing an Open ticket, starting unassigned work, resolving twice) is a **409 Conflict** with the reason, bad input is a **400**, and an unknown or deleted ticket is a **404**. A rejected step saves nothing.
 
+- Users (`/api/users`): list them (`GET /api/users`, optionally `?role=Technician`), look one up (`GET /api/users/{id}`), or add one (`POST /api/users` with `{"name", "email", "role"}`; role 0 = User, 1 = Technician). A duplicate email (compared case-insensitively) or a bad name/email is a 400. Seeded users: **Adrian Rodriguez** (Technician) and **John Doe** (User), with placeholder `@example.com` emails.
+
 ## Business rules
 
 Rules are enforced on the `Ticket` entity itself, not in controllers or services, so they cannot be bypassed regardless of the caller:
 
 - Tickets can only be constructed through the `Ticket.Create()` factory, which guarantees a valid initial state. An invalid ticket is unrepresentable, not merely validated.
 - A title must be non-blank and at most 255 characters, and a description at most 2,000, measured after trimming. The limits are constants on `Ticket` that `AppDbContext` also uses for the column sizes, so they can't drift apart; an over-long or blank title is a 400 from `POST /api/tickets`, never a database error.
+- Every ticket's creator and technician are real users: the database enforces it with foreign keys, and the API turns an unknown user into a 400. Only a **Technician** can be assigned a ticket (`Ticket.AssignTo(User)` checks the role).
 - A ticket cannot be resolved unless it has an assigned technician and a written resolution summary, and it can only be resolved once — resolving again would overwrite the original summary and `ResolvedAt`.
 - A ticket cannot be soft-deleted twice — the original `DeletedAt` timestamp is preserved because overwriting it would falsify the audit trail.
 

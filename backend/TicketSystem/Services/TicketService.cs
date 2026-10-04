@@ -27,6 +27,10 @@ namespace TicketSystem.Services
 
             var ticket = Ticket.Create(title, description, priority, createdByUserId);
 
+            // Checked after the ticket's own rules, so a blank title is reported before an unknown user.
+            if (!await _dbContext.Users.AnyAsync(u => u.Id == createdByUserId))
+                throw new ArgumentException($"No user with id {createdByUserId}.");
+
             _dbContext.Tickets.Add(ticket);
 
             await _dbContext.SaveChangesAsync();
@@ -46,8 +50,20 @@ namespace TicketSystem.Services
         // Workflow steps. Each returns null for an unknown (or deleted) ticket; the entity throws
         // InvalidOperationException when the step isn't allowed in the ticket's current state and
         // ArgumentException for bad input, and nothing is saved in either case.
-        public Task<Ticket?> AssignTicket(Guid ticketId, Guid technicianId) =>
-            ApplyToTicket(ticketId, ticket => ticket.AssignTo(technicianId));
+        // An unknown ticket is null (404); an unknown or non-technician user is bad input (400).
+        public async Task<Ticket?> AssignTicket(Guid ticketId, Guid technicianId)
+        {
+            var ticket = await _dbContext.Tickets.FindAsync(ticketId);
+            if (ticket is null)
+                return null;
+
+            var technician = await _dbContext.Users.FindAsync(technicianId)
+                ?? throw new ArgumentException($"No user with id {technicianId}.");
+
+            ticket.AssignTo(technician);
+            await _dbContext.SaveChangesAsync();
+            return ticket;
+        }
 
         public Task<Ticket?> StartWork(Guid ticketId) =>
             ApplyToTicket(ticketId, ticket => ticket.StartWork());

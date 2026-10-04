@@ -51,17 +51,17 @@ namespace TicketSystem.Models
             };
         }
 
-        // Business rule: can only assign open tickets
-        public void AssignTo(Guid technicianId)
+        // Business rules: only technicians can be assigned, and only to open tickets
+        public void AssignTo(User technician)
         {
-            if (technicianId == Guid.Empty)
-                throw new ArgumentException("A technician id is required.");
+            if (technician.Role != UserRole.Technician)
+                throw new ArgumentException($"{technician.Name} is not a technician. Only technicians can be assigned.");
 
             if (Status != TicketStatus.Open)
                 throw new InvalidOperationException(
                     $"Cannot assign a ticket that is {Status}. Only Open tickets can be assigned.");
 
-            AssignedToUserId = technicianId;
+            AssignedToUserId = technician.Id;
         }
 
 

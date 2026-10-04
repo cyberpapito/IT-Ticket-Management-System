@@ -15,13 +15,34 @@ namespace TicketSystem.Tests
                 .UseInMemoryDatabase(Guid.NewGuid().ToString())
                 .Options;
 
+        // Loads the users the AddUsers migration seeds (Adrian Rodriguez, John Doe, Unknown).
+        public TicketsControllerTests()
+        {
+            using var context = new AppDbContext(_options);
+            context.Database.EnsureCreated();
+        }
+
         private static CreateTicketRequest Request(string title) => new()
         {
             Title = title,
             Description = "desc",
             Priority = TicketPriority.Low,
-            CreatedByUserId = Guid.NewGuid()
+            CreatedByUserId = SeedUsers.JohnDoeId
         };
+
+        [Fact]
+        public async Task CreateTicket_UnknownCreatorReturns400()
+        {
+            using var context = new AppDbContext(_options);
+            var controller = new TicketsController(new TicketService(context));
+            var request = Request("Monitor flickering");
+            request.CreatedByUserId = Guid.NewGuid();
+
+            var result = await controller.CreateTicket(request);
+
+            var problem = Assert.IsType<ProblemDetails>(Assert.IsType<BadRequestObjectResult>(result.Result).Value);
+            Assert.StartsWith("No user with id", problem.Detail);
+        }
 
         [Fact]
         public async Task CreateTicket_ValidRequestReturns201()

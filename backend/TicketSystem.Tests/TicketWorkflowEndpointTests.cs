@@ -12,12 +12,19 @@ namespace TicketSystem.Tests
     // provider. Each test reads back through a fresh context to check what was actually saved.
     public class TicketWorkflowEndpointTests
     {
-        private static readonly Guid Technician = Guid.NewGuid();
+        private static readonly Guid Technician = SeedUsers.AdrianRodriguezId;
 
         private readonly DbContextOptions<AppDbContext> _options =
             new DbContextOptionsBuilder<AppDbContext>()
                 .UseInMemoryDatabase(Guid.NewGuid().ToString())
                 .Options;
+
+        // Loads the users the AddUsers migration seeds (Adrian Rodriguez, John Doe, Unknown).
+        public TicketWorkflowEndpointTests()
+        {
+            using var context = new AppDbContext(_options);
+            context.Database.EnsureCreated();
+        }
 
         private async Task<T> WithController<T>(Func<TicketsController, Task<T>> act)
         {
@@ -29,7 +36,7 @@ namespace TicketSystem.Tests
         {
             using var context = new AppDbContext(_options);
             var ticket = await new TicketService(context)
-                .CreateTicket("Laptop won't boot", "Black screen", TicketPriority.High, Guid.NewGuid());
+                .CreateTicket("Laptop won't boot", "Black screen", TicketPriority.High, SeedUsers.JohnDoeId);
             return ticket.Id;
         }
 
@@ -119,9 +126,24 @@ namespace TicketSystem.Tests
             await WithController(c => c.AssignTicket(id, new AssignTicketRequest { TechnicianId = Technician }));
             await WithController(c => c.StartWork(id));
 
+            Guid otherTechnician;
+            using (var context = new AppDbContext(_options))
+                otherTechnician = (await new UserService(context).CreateUser("Tech Two", "tech2@example.com", UserRole.Technician)).Id;
+
             Problem<ConflictObjectResult>(
-                await WithController(c => c.AssignTicket(id, new AssignTicketRequest { TechnicianId = Guid.NewGuid() })), 409);
+                await WithController(c => c.AssignTicket(id, new AssignTicketRequest { TechnicianId = otherTechnician })), 409);
             Assert.Equal(Technician, (await Stored(id)).AssignedToUserId);
+        }
+
+        [Fact]
+        public async Task AssigningSomeoneWhoIsNotATechnicianIs400()
+        {
+            var id = await NewTicket();
+
+            var problem = Problem<BadRequestObjectResult>(
+                await WithController(c => c.AssignTicket(id, new AssignTicketRequest { TechnicianId = SeedUsers.JohnDoeId })), 400);
+            Assert.Equal("John Doe is not a technician. Only technicians can be assigned.", problem.Detail);
+            Assert.Null((await Stored(id)).AssignedToUserId);
         }
 
         [Fact]
@@ -131,7 +153,7 @@ namespace TicketSystem.Tests
 
             var problem = Problem<BadRequestObjectResult>(
                 await WithController(c => c.AssignTicket(id, new AssignTicketRequest { TechnicianId = Guid.Empty })), 400);
-            Assert.Equal("A technician id is required.", problem.Detail);
+            Assert.Equal($"No user with id {Guid.Empty}.", problem.Detail);
             Assert.Null((await Stored(id)).AssignedToUserId);
 
             await WithController(c => c.AssignTicket(id, new AssignTicketRequest { TechnicianId = Technician }));
