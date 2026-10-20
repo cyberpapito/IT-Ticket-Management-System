@@ -1,6 +1,6 @@
 # IT Ticket Management System
 
-A full-stack IT support ticket system built with **C# / ASP.NET Core** and **SQL Server**, with a **React / TypeScript** frontend planned. The system lets IT staff create, track, assign, and resolve support tickets.
+A full-stack IT support ticket system built with **C# / ASP.NET Core** and **SQL Server**, with a **React / TypeScript** frontend. The system lets IT staff create, track, assign, and resolve support tickets.
 
 ## What it does
 
@@ -20,6 +20,26 @@ Currently working, verified end-to-end via Swagger:
 
 - Users (`/api/users`): list them (`GET /api/users`, optionally `?role=Technician`), look one up (`GET /api/users/{id}`), or add one (`POST /api/users` with `{"name", "email", "role"}`; role 0 = User, 1 = Technician). A duplicate email (compared case-insensitively) or a bad name/email is a 400. Seeded users: **Adrian Rodriguez** (Technician) and **John Doe** (User), with placeholder `@example.com` emails.
 
+## Frontend
+
+`frontend/` is a React + TypeScript app (Vite) over the same API:
+
+- **Tickets**: every ticket that isn't closed, most urgent first, with counts per status, search, and status/priority filters. Names replace the user ids the API returns. A form creates a ticket (title, description, priority, who reported it).
+- **Ticket page**: the details, plus the workflow steps the ticket's state allows: assign a technician (only Technicians are offered), start work, resolve with a summary, close, or delete. When the API refuses a step, its 400/409 reason is shown as is and the ticket stays as it was.
+- **Users**: the list, and a form to add a user or technician.
+
+The buttons mirror the entity's rules only so the page doesn't offer steps that can only fail; the API still decides. There's no sign-in yet, so anyone using the page can act as anyone.
+
+```bash
+# terminal 1: the API on http://localhost:5137
+cd backend/TicketSystem && dotnet run --launch-profile http
+
+# terminal 2: the UI on http://localhost:5173
+cd frontend && npm install && npm run dev
+```
+
+The Vite dev server forwards `/api` to the API, so the API needs no CORS setup. `npm test` runs the Vitest suite (no API needed).
+
 ## Business rules
 
 Rules are enforced on the `Ticket` entity itself, not in controllers or services, so they cannot be bypassed regardless of the caller:
@@ -36,7 +56,13 @@ Soft-deleted tickets are hidden by an EF Core global query filter (`DeletedAt ==
 
 ## Tech stack
 
-**Backend (current)**
+**Frontend**
+
+- React 19 + TypeScript, built with Vite
+- React Router
+- Vitest + Testing Library
+
+**Backend**
 
 - C# / ASP.NET Core 9 (Web API)
 - Entity Framework Core 9
