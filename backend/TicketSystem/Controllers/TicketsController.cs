@@ -60,6 +60,14 @@ namespace TicketSystem.Controllers
             return Ok(tickets);
         }
 
+        // Soft-deleted tickets, newest deletion first. The literal segment outranks "{id}" in
+        // routing, so this never reaches GetTicketById.
+        [HttpGet("deleted")]
+        public async Task<ActionResult<List<Ticket>>> GetDeletedTickets()
+        {
+            return Ok(await _ticketService.GetDeletedTickets());
+        }
+
         [HttpPost("{id}/assign")]
         public Task<ActionResult<Ticket>> AssignTicket(Guid id, AssignTicketRequest request) =>
             ApplyWorkflowStep(() => _ticketService.AssignTicket(id, request.TechnicianId));

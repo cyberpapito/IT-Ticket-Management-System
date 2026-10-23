@@ -215,5 +215,30 @@ namespace TicketSystem.Tests
 
             Assert.Equal(kept.Id, Assert.Single(tickets).Id);
         }
+
+        [Fact]
+        public async Task GetDeletedTickets_EmptyWhenNothingDeleted()
+        {
+            await Seed();
+
+            using var context = NewContext();
+            Assert.Empty(await new TicketService(context).GetDeletedTickets());
+        }
+
+        [Fact]
+        public async Task GetDeletedTickets_OnlyDeletedOnesNewestDeletionFirst()
+        {
+            await Seed("Keep me");
+            var first = await Seed("Deleted first");
+            var second = await Seed("Deleted second");
+            await Delete(first.Id);
+            await Delete(second.Id);
+
+            using var context = NewContext();
+            var deleted = await new TicketService(context).GetDeletedTickets();
+
+            Assert.Equal([second.Id, first.Id], deleted.Select(t => t.Id));
+            Assert.All(deleted, t => Assert.NotNull(t.DeletedAt));
+        }
     }
 }
