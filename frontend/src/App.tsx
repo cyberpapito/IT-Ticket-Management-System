@@ -1,4 +1,5 @@
 import { Link, NavLink, Route, Routes } from 'react-router-dom'
+import { DeletedTicketsPage } from './pages/DeletedTicketsPage'
 import { TicketDetailPage } from './pages/TicketDetailPage'
 import { TicketsPage } from './pages/TicketsPage'
 import { UsersPage } from './pages/UsersPage'
@@ -14,6 +15,7 @@ export default function App() {
           <NavLink to="/" end>
             Tickets
           </NavLink>
+          <NavLink to="/deleted">Deleted</NavLink>
           <NavLink to="/users">Users</NavLink>
         </nav>
       </header>
@@ -22,6 +24,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<TicketsPage />} />
           <Route path="/tickets/:id" element={<TicketDetailPage />} />
+          <Route path="/deleted" element={<DeletedTicketsPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route
             path="*"

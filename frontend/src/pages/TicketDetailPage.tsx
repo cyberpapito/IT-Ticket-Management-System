@@ -48,7 +48,7 @@ export function TicketDetailPage() {
   }
 
   async function remove() {
-    if (!confirm('Delete this ticket? It will be hidden from the list.')) return
+    if (!confirm('Delete this ticket? It will move to the Deleted list and can no longer be changed.')) return
     setBusy(true)
     try {
       await api.deleteTicket(id)

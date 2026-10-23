@@ -128,6 +128,7 @@ const post = <T>(path: string, body?: unknown) =>
 export const api = {
   getTickets: () => request<Ticket[]>('/tickets'),
   getTicket: (id: string) => request<Ticket>(`/tickets/${id}`),
+  getDeletedTickets: () => request<Ticket[]>('/tickets/deleted'),
   createTicket: (ticket: CreateTicketRequest) => post<Ticket>('/tickets', ticket),
   deleteTicket: (id: string) => request<void>(`/tickets/${id}`, { method: 'DELETE' }),
 

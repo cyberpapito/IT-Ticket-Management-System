@@ -76,6 +76,24 @@ namespace TicketSystem.Tests
             Assert.Empty(await check.Tickets.IgnoreQueryFilters().ToListAsync());
         }
 
+        [Fact]
+        public async Task GetDeletedTickets_Returns200WithDeletedTicketsOnly()
+        {
+            using var context = new AppDbContext(_options);
+            var controller = new TicketsController(new TicketService(context));
+            var kept = Assert.IsType<Ticket>(Assert.IsType<CreatedAtActionResult>(
+                (await controller.CreateTicket(Request("Keep me"))).Result).Value);
+            var gone = Assert.IsType<Ticket>(Assert.IsType<CreatedAtActionResult>(
+                (await controller.CreateTicket(Request("Delete me"))).Result).Value);
+            Assert.IsType<NoContentResult>(await controller.DeleteTicket(gone.Id));
+
+            var result = await controller.GetDeletedTickets();
+
+            var deleted = Assert.IsType<List<Ticket>>(Assert.IsType<OkObjectResult>(result.Result).Value);
+            Assert.Equal(gone.Id, Assert.Single(deleted).Id);
+            Assert.DoesNotContain(deleted, t => t.Id == kept.Id);
+        }
+
         [Theory]
         [InlineData("")]
         [InlineData("   ")]

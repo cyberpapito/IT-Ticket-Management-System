@@ -47,6 +47,17 @@ namespace TicketSystem.Services
             return await _dbContext.Tickets.ToListAsync();
         }
 
+        // The audit history: the only query that steps past the soft-delete filter. Most recently
+        // deleted first. Read-only; there is no undelete.
+        public async Task<List<Ticket>> GetDeletedTickets()
+        {
+            return await _dbContext.Tickets
+                .IgnoreQueryFilters()
+                .Where(t => t.DeletedAt != null)
+                .OrderByDescending(t => t.DeletedAt)
+                .ToListAsync();
+        }
+
         // Workflow steps. Each returns null for an unknown (or deleted) ticket; the entity throws
         // InvalidOperationException when the step isn't allowed in the ticket's current state and
         // ArgumentException for bad input, and nothing is saved in either case.
