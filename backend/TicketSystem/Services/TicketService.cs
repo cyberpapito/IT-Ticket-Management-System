@@ -96,6 +96,34 @@ namespace TicketSystem.Services
             return ticket;
         }
 
+        // The ticket's history, oldest first. Null for an unknown (or deleted) ticket.
+        public async Task<List<TicketActivity>?> GetActivity(Guid ticketId)
+        {
+            if (!await _dbContext.Tickets.AnyAsync(t => t.Id == ticketId))
+                return null;
+
+            return await _dbContext.TicketActivities
+                .Where(a => a.TicketId == ticketId)
+                .OrderBy(a => a.At)
+                .ToListAsync();
+        }
+
+        // Null for an unknown (or deleted) ticket; an unknown author is bad input (400), and the
+        // entity rejects an empty or oversized comment.
+        public async Task<TicketActivity?> AddComment(Guid ticketId, Guid authorId, string text)
+        {
+            var ticket = await _dbContext.Tickets.FindAsync(ticketId);
+            if (ticket is null)
+                return null;
+
+            var author = await _dbContext.Users.FindAsync(authorId)
+                ?? throw new ArgumentException($"No user with id {authorId}.");
+
+            var comment = ticket.AddComment(author, text);
+            await _dbContext.SaveChangesAsync();
+            return comment;
+        }
+
         // Returns null for unknown and already-deleted tickets alike: the query filter
         // hides deleted ones, so a second DELETE is a 404 rather than a domain error.
         public async Task<Ticket?> SoftDeleteTicket(Guid ticketId)

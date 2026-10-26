@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ApiError, api, availableSteps, UserRole, type Ticket } from '../api'
 import { PriorityBadge, StatusBadge } from '../components/Badges'
 import { ErrorMessage } from '../components/ErrorMessage'
+import { Timeline } from '../components/Timeline'
 import { formatDateTime } from '../format'
 import { useUsers } from '../useUsers'
 
@@ -15,6 +16,7 @@ export function TicketDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [stepError, setStepError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [stepsTaken, setStepsTaken] = useState(0)
 
   const [technicianId, setTechnicianId] = useState('')
   const [summary, setSummary] = useState('')
@@ -40,6 +42,7 @@ export function TicketDetailPage() {
     try {
       setTicket(await step())
       setSummary('')
+      setStepsTaken((n) => n + 1)
     } catch (e) {
       setStepError((e as Error).message)
     } finally {
@@ -93,40 +96,50 @@ export function TicketDetailPage() {
       </Link>
 
       <div className="detail">
-        <article className="panel">
-          <div className="detail-head">
-            <StatusBadge status={ticket.status} />
-            <PriorityBadge priority={ticket.priority} />
-          </div>
-          <h1>{ticket.title}</h1>
-          {ticket.description ? (
-            <p className="description">{ticket.description}</p>
-          ) : (
-            <p className="muted">No description.</p>
-          )}
-
-          {ticket.resolutionSummary !== null && (
-            <section className="resolution">
-              <h2>Resolution</h2>
-              <p>{ticket.resolutionSummary}</p>
-            </section>
-          )}
-
-          <dl className="facts">
-            <dt>Reported by</dt>
-            <dd>{nameOf(ticket.createdByUserId)}</dd>
-            <dt>Technician</dt>
-            <dd>{nameOf(ticket.assignedToUserId) ?? 'Unassigned'}</dd>
-            <dt>Created</dt>
-            <dd>{formatDateTime(ticket.createdAt)}</dd>
-            {ticket.resolvedAt !== null && (
-              <>
-                <dt>Resolved</dt>
-                <dd>{formatDateTime(ticket.resolvedAt)}</dd>
-              </>
+        <div className="detail-main">
+          <article className="panel">
+            <div className="detail-head">
+              <StatusBadge status={ticket.status} />
+              <PriorityBadge priority={ticket.priority} />
+            </div>
+            <h1>{ticket.title}</h1>
+            {ticket.description ? (
+              <p className="description">{ticket.description}</p>
+            ) : (
+              <p className="muted">No description.</p>
             )}
-          </dl>
-        </article>
+
+            {ticket.resolutionSummary !== null && (
+              <section className="resolution">
+                <h2>Resolution</h2>
+                <p>{ticket.resolutionSummary}</p>
+              </section>
+            )}
+
+            <dl className="facts">
+              <dt>Reported by</dt>
+              <dd>{nameOf(ticket.createdByUserId)}</dd>
+              <dt>Technician</dt>
+              <dd>{nameOf(ticket.assignedToUserId) ?? 'Unassigned'}</dd>
+              <dt>Created</dt>
+              <dd>{formatDateTime(ticket.createdAt)}</dd>
+              {ticket.resolvedAt !== null && (
+                <>
+                  <dt>Resolved</dt>
+                  <dd>{formatDateTime(ticket.resolvedAt)}</dd>
+                </>
+              )}
+            </dl>
+          </article>
+
+          <Timeline
+            ticketId={ticket.id}
+            refreshKey={stepsTaken}
+            users={users}
+            nameOf={nameOf}
+            defaultAuthorId={ticket.createdByUserId}
+          />
+        </div>
 
         <aside className="panel workflow" aria-label="Workflow">
           <h2>Next steps</h2>

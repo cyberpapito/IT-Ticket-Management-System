@@ -468,6 +468,105 @@ td a:hover {
   margin: 0.25rem 0;
 }
 
+.detail-main {
+  min-width: 0;
+}
+
+/* Ticket history: a vertical line with a dot per entry, colored like the status it led to. */
+.timeline h2 {
+  margin-top: 0;
+}
+
+.events {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+}
+
+.event {
+  position: relative;
+  padding: 0 0 1rem 1.5rem;
+  border-left: 2px solid var(--border);
+  margin-left: 0.4rem;
+}
+
+.event:last-child {
+  border-left-color: transparent;
+  padding-bottom: 0;
+}
+
+.event::before {
+  content: '';
+  position: absolute;
+  left: -7px;
+  top: 0.3rem;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--closed);
+}
+
+.event.created::before,
+.event.assigned::before {
+  border-color: var(--open);
+}
+
+.event.started::before {
+  border-color: var(--progress);
+}
+
+.event.resolved::before {
+  border-color: var(--resolved);
+  background: var(--resolved);
+}
+
+.event.deleted::before {
+  border-color: var(--danger);
+}
+
+.event.comment::before {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.event-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+}
+
+.event-head time {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.event-note {
+  margin: 0.35rem 0 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.comment-form {
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.comment-form .actions {
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.comment-form label.inline {
+  font-weight: 400;
+}
+
 @media (max-width: 760px) {
   main {
     padding: 1rem;
