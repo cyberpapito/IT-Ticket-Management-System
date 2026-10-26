@@ -90,3 +90,7 @@ The backend is a single ASP.NET Core project with a strict **Controller → Serv
 cd backend/TicketSystem.Tests
 dotnet test
 ```
+
+## Security
+
+[`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) is a STRIDE threat model of the current design. The app has no sign-in yet and only runs on localhost, so the model's high-severity items are requirements for the next roadmap step (sign-in and roles), which comes before any deploy.
