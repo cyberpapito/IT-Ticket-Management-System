@@ -1,15 +1,34 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
-import { TicketStatus, type Ticket } from '../api'
+import { TicketActivityType, TicketStatus, type Ticket, type TicketActivity } from '../api'
 import { adrian, fakeApi, john, ticket, type Routes as ApiRoutes } from '../test/fakeApi'
 import { TicketDetailPage } from './TicketDetailPage'
+
+function entry(overrides: Partial<TicketActivity>): TicketActivity {
+  return {
+    id: crypto.randomUUID(),
+    ticketId: 't1',
+    type: TicketActivityType.Created,
+    at: '2026-10-20T14:00:00+00:00',
+    userId: null,
+    note: null,
+    fromStatus: null,
+    toStatus: null,
+    ...overrides,
+  }
+}
+
+const workflow = () => screen.findByRole('complementary', { name: 'Workflow' })
+
+const created = entry({ userId: john.id, toStatus: TicketStatus.Open })
 
 function renderPage(t: Ticket, routes: ApiRoutes = {}) {
   const fetchMock = fakeApi({
     'GET /api/tickets/t1': [200, t],
     'GET /api/users': [200, [adrian, john]],
+    'GET /api/tickets/t1/activity': [200, [created]],
     ...routes,
   })
   render(
@@ -31,7 +50,7 @@ describe('TicketDetailPage', () => {
     expect(screen.queryByRole('button', { name: 'Start work' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Resolve' })).not.toBeInTheDocument()
 
-    const options = await screen.findAllByRole('option')
+    const options = await within(await workflow()).findAllByRole('option')
     expect(options.map((o) => o.textContent)).toEqual(['Adrian Rodriguez'])
   })
 
@@ -40,7 +59,7 @@ describe('TicketDetailPage', () => {
     const fetchMock = renderPage(ticket(), {
       'POST /api/tickets/t1/assign': [200, ticket({ assignedToUserId: adrian.id })],
     })
-    await screen.findByRole('option', { name: 'Adrian Rodriguez' })
+    await within(await workflow()).findByRole('option', { name: 'Adrian Rodriguez' })
 
     await user.click(screen.getByRole('button', { name: 'Assign' }))
 
@@ -69,6 +88,70 @@ describe('TicketDetailPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Cannot close a ticket that is Closed')
     expect(screen.getByText('Resolved', { selector: '.badge' })).toBeInTheDocument()
+  })
+
+  it('shows the history with names, notes and comments', async () => {
+    renderPage(
+      ticket({
+        assignedToUserId: adrian.id,
+        status: TicketStatus.Resolved,
+        resolutionSummary: 'Replaced the toner',
+        resolvedAt: '2026-10-20T15:00:00+00:00',
+      }),
+      {
+        'GET /api/tickets/t1/activity': [
+          200,
+          [
+            created,
+            entry({ type: TicketActivityType.Assigned, userId: adrian.id }),
+            entry({ type: TicketActivityType.Comment, userId: adrian.id, note: 'Toner is on order' }),
+            entry({ type: TicketActivityType.Resolved, note: 'Replaced the toner' }),
+          ],
+        ],
+      },
+    )
+
+    const activity = await screen.findByRole('region', { name: 'Activity' })
+    expect(await within(activity).findByText('John Doe reported the ticket')).toBeInTheDocument()
+    expect(within(activity).getByText('Assigned to Adrian Rodriguez')).toBeInTheDocument()
+    expect(within(activity).getByText('Toner is on order')).toBeInTheDocument()
+    expect(within(activity).getAllByRole('listitem')).toHaveLength(4)
+  })
+
+  it('posts a comment as the chosen person and adds it to the history', async () => {
+    const user = userEvent.setup()
+    const fetchMock = renderPage(ticket(), {
+      'POST /api/tickets/t1/comments': [
+        201,
+        entry({ type: TicketActivityType.Comment, userId: adrian.id, note: 'Coming by at 3' }),
+      ],
+    })
+    const activity = await screen.findByRole('region', { name: 'Activity' })
+    await within(activity).findByText('John Doe reported the ticket')
+
+    await user.selectOptions(within(activity).getByRole('combobox'), 'Adrian Rodriguez')
+    await user.type(within(activity).getByRole('textbox'), 'Coming by at 3')
+    await user.click(within(activity).getByRole('button', { name: 'Comment' }))
+
+    expect(await within(activity).findByText('Coming by at 3')).toBeInTheDocument()
+    expect(within(activity).getByRole('textbox')).toHaveValue('')
+    const [, init] = fetchMock.mock.calls.find(([url]) => url.endsWith('/comments'))!
+    expect(JSON.parse(init!.body as string)).toEqual({ authorUserId: adrian.id, text: 'Coming by at 3' })
+  })
+
+  it('reloads the history after a workflow step', async () => {
+    const user = userEvent.setup()
+    const fetchMock = renderPage(ticket(), {
+      'POST /api/tickets/t1/assign': [200, ticket({ assignedToUserId: adrian.id })],
+    })
+    await within(await workflow()).findByRole('option', { name: 'Adrian Rodriguez' })
+    const activityCalls = () => fetchMock.mock.calls.filter(([url]) => url.endsWith('/activity')).length
+    const before = activityCalls()
+
+    await user.click(screen.getByRole('button', { name: 'Assign' }))
+
+    await screen.findByRole('button', { name: 'Start work' })
+    expect(activityCalls()).toBe(before + 1)
   })
 
   it('says so when the ticket does not exist', async () => {

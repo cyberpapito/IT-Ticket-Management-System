@@ -10,6 +10,18 @@ export type TicketPriority = (typeof TicketPriority)[keyof typeof TicketPriority
 export const UserRole = { User: 0, Technician: 1 } as const
 export type UserRole = (typeof UserRole)[keyof typeof UserRole]
 
+// TicketActivityType on the backend: one entry per workflow step, plus comments.
+export const TicketActivityType = {
+  Created: 0,
+  Assigned: 1,
+  Started: 2,
+  Resolved: 3,
+  Closed: 4,
+  Deleted: 5,
+  Comment: 6,
+} as const
+export type TicketActivityType = (typeof TicketActivityType)[keyof typeof TicketActivityType]
+
 export const statusLabels: Record<TicketStatus, string> = {
   0: 'Open',
   1: 'In progress',
@@ -34,6 +46,7 @@ export const roleLabels: Record<UserRole, string> = {
 export const TITLE_MAX_LENGTH = 255
 export const DESCRIPTION_MAX_LENGTH = 2000
 export const NAME_MAX_LENGTH = 100
+export const COMMENT_MAX_LENGTH = 2000 // TicketActivity.NoteMaxLength
 
 export interface Ticket {
   id: string
@@ -55,6 +68,19 @@ export interface User {
   email: string
   role: UserRole
   createdAt: string
+}
+
+// One entry in a ticket's history. `userId` is the person it names: the reporter on Created,
+// the technician on Assigned, the author on Comment; null otherwise.
+export interface TicketActivity {
+  id: string
+  ticketId: string
+  type: TicketActivityType
+  at: string
+  userId: string | null
+  note: string | null
+  fromStatus: TicketStatus | null
+  toStatus: TicketStatus | null
 }
 
 export interface CreateTicketRequest {
@@ -138,6 +164,10 @@ export const api = {
   resolveTicket: (id: string, resolutionSummary: string) =>
     post<Ticket>(`/tickets/${id}/resolve`, { resolutionSummary }),
   closeTicket: (id: string) => post<Ticket>(`/tickets/${id}/close`),
+
+  getActivity: (id: string) => request<TicketActivity[]>(`/tickets/${id}/activity`),
+  addComment: (id: string, authorUserId: string, text: string) =>
+    post<TicketActivity>(`/tickets/${id}/comments`, { authorUserId, text }),
 
   getUsers: (role?: UserRole) =>
     request<User[]>(role === undefined ? '/users' : `/users?role=${role}`),

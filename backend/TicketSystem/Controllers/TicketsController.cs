@@ -68,6 +68,38 @@ namespace TicketSystem.Controllers
             return Ok(await _ticketService.GetDeletedTickets());
         }
 
+        // The ticket's history, oldest first: each workflow step and comment.
+        [HttpGet("{id}/activity")]
+        public async Task<ActionResult<List<TicketActivity>>> GetActivity(Guid id)
+        {
+            var activity = await _ticketService.GetActivity(id);
+            return activity is null ? NotFound() : Ok(activity);
+        }
+
+        [HttpPost("{id}/comments")]
+        public async Task<ActionResult<TicketActivity>> AddComment(Guid id, AddCommentRequest request)
+        {
+            TicketActivity? comment;
+            try
+            {
+                comment = await _ticketService.AddComment(id, request.AuthorUserId, request.Text);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "Invalid comment",
+                    Detail = ex.Message
+                });
+            }
+
+            if (comment is null)
+                return NotFound();
+
+            return CreatedAtAction(nameof(GetActivity), new { id }, comment);
+        }
+
         [HttpPost("{id}/assign")]
         public Task<ActionResult<Ticket>> AssignTicket(Guid id, AssignTicketRequest request) =>
             ApplyWorkflowStep(() => _ticketService.AssignTicket(id, request.TechnicianId));

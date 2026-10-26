@@ -19,6 +19,8 @@ Currently working, verified end-to-end via Swagger:
 
   The entity decides whether a step is allowed; the controller only translates its answer. A step the ticket's current state doesn't allow (closing an Open ticket, starting unassigned work, resolving twice) is a **409 Conflict** with the reason, bad input is a **400**, and an unknown or deleted ticket is a **404**. A rejected step saves nothing.
 
+- A ticket's history (`GET /api/tickets/{id}/activity`), oldest first: one entry per workflow step (created, assigned, started, resolved, closed, deleted) and per comment, with who it names, any note (the comment, or the resolution summary) and the status change. Add a comment with `POST /api/tickets/{id}/comments` and `{"authorUserId": "…", "text": "…"}`, which returns 201 with the entry; empty or over-2,000-character text, or an unknown author, is a 400. An unknown or deleted ticket is a 404 on both.
+
 - Users (`/api/users`): list them (`GET /api/users`, optionally `?role=Technician`), look one up (`GET /api/users/{id}`), or add one (`POST /api/users` with `{"name", "email", "role"}`; role 0 = User, 1 = Technician). A duplicate email (compared case-insensitively) or a bad name/email is a 400. Seeded users: **Adrian Rodriguez** (Technician) and **John Doe** (User), with placeholder `@example.com` emails.
 
 ## Frontend
@@ -26,7 +28,7 @@ Currently working, verified end-to-end via Swagger:
 `frontend/` is a React + TypeScript app (Vite) over the same API:
 
 - **Tickets**: every ticket that isn't closed, most urgent first, with counts per status, search, and status/priority filters. Names replace the user ids the API returns. A form creates a ticket (title, description, priority, who reported it).
-- **Ticket page**: the details, plus the workflow steps the ticket's state allows: assign a technician (only Technicians are offered), start work, resolve with a summary, close, or delete. When the API refuses a step, its 400/409 reason is shown as is and the ticket stays as it was.
+- **Ticket page**: the details, plus the workflow steps the ticket's state allows: assign a technician (only Technicians are offered), start work, resolve with a summary, close, or delete. When the API refuses a step, its 400/409 reason is shown as is and the ticket stays as it was. Below the details, the **Activity** timeline shows the ticket's history and comments, with a box to add one (pick who's commenting).
 - **Deleted**: the deleted tickets, newest deletion first, with their status, people, resolution and when they were deleted. Read-only.
 - **Users**: the list, and a form to add a user or technician.
 
@@ -51,6 +53,7 @@ Rules are enforced on the `Ticket` entity itself, not in controllers or services
 - Every ticket's creator and technician are real users: the database enforces it with foreign keys, and the API turns an unknown user into a 400. Only a **Technician** can be assigned a ticket (`Ticket.AssignTo(User)` checks the role).
 - A ticket cannot be resolved unless it has an assigned technician and a written resolution summary, and it can only be resolved once — resolving again would overwrite the original summary and `ResolvedAt`.
 - A ticket cannot be soft-deleted twice — the original `DeletedAt` timestamp is preserved because overwriting it would falsify the audit trail.
+- The ticket writes its own history: every step above adds a `TicketActivity` entry in the same method that changes the state, and a rejected step adds nothing, so the history can't disagree with the ticket. Comments go through `Ticket.AddComment(User, text)` too (any user, any status, but not on a deleted ticket). Entries are only ever added, never edited.
 
 Soft-deleted tickets are hidden by an EF Core global query filter (`DeletedAt == null`) on `AppDbContext`, so no query can forget to exclude them; `IgnoreQueryFilters()` reaches them when the audit history is needed, and `TicketService.GetDeletedTickets()` (behind `GET /api/tickets/deleted`) is the one query that does.
 
