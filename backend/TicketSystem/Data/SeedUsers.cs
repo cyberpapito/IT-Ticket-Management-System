@@ -15,11 +15,13 @@ namespace TicketSystem.Data
 
         public static readonly DateTimeOffset SeededAt = new(2026, 10, 3, 0, 0, 0, TimeSpan.Zero);
 
+        // Seeded users have no password, so nobody can sign in as them until an Admin sets one.
+        // Fixed stamps so the model snapshot doesn't change on every build.
         public static object[] All =>
         [
-            new { Id = AdrianRodriguezId, Name = "Adrian Rodriguez", Email = "adrian.rodriguez@example.com", Role = UserRole.Technician, CreatedAt = SeededAt },
-            new { Id = JohnDoeId, Name = "John Doe", Email = "john.doe@example.com", Role = UserRole.User, CreatedAt = SeededAt },
-            new { Id = UnknownId, Name = "Unknown (pre-users)", Email = "unknown@example.com", Role = UserRole.User, CreatedAt = SeededAt },
+            new { Id = AdrianRodriguezId, Name = "Adrian Rodriguez", Email = "adrian.rodriguez@example.com", Role = UserRole.Technician, CreatedAt = SeededAt, SecurityStamp = "seed-adrian-rodriguez" },
+            new { Id = JohnDoeId, Name = "John Doe", Email = "john.doe@example.com", Role = UserRole.User, CreatedAt = SeededAt, SecurityStamp = "seed-john-doe" },
+            new { Id = UnknownId, Name = "Unknown (pre-users)", Email = "unknown@example.com", Role = UserRole.User, CreatedAt = SeededAt, SecurityStamp = "seed-unknown" },
         ];
     }
 }

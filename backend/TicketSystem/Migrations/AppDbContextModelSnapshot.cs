@@ -76,6 +76,9 @@ namespace TicketSystem.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTimeOffset>("At")
                         .HasColumnType("datetimeoffset");
 
@@ -98,6 +101,8 @@ namespace TicketSystem.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
 
                     b.HasIndex("UserId");
 
@@ -125,8 +130,17 @@ namespace TicketSystem.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("PasswordHash")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
                     b.Property<int>("Role")
                         .HasColumnType("int");
+
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -142,7 +156,8 @@ namespace TicketSystem.Migrations
                             CreatedAt = new DateTimeOffset(new DateTime(2026, 10, 3, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Email = "adrian.rodriguez@example.com",
                             Name = "Adrian Rodriguez",
-                            Role = 1
+                            Role = 1,
+                            SecurityStamp = "seed-adrian-rodriguez"
                         },
                         new
                         {
@@ -150,7 +165,8 @@ namespace TicketSystem.Migrations
                             CreatedAt = new DateTimeOffset(new DateTime(2026, 10, 3, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Email = "john.doe@example.com",
                             Name = "John Doe",
-                            Role = 0
+                            Role = 0,
+                            SecurityStamp = "seed-john-doe"
                         },
                         new
                         {
@@ -158,7 +174,8 @@ namespace TicketSystem.Migrations
                             CreatedAt = new DateTimeOffset(new DateTime(2026, 10, 3, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Email = "unknown@example.com",
                             Name = "Unknown (pre-users)",
-                            Role = 0
+                            Role = 0,
+                            SecurityStamp = "seed-unknown"
                         });
                 });
 
@@ -178,6 +195,11 @@ namespace TicketSystem.Migrations
 
             modelBuilder.Entity("TicketSystem.Models.TicketActivity", b =>
                 {
+                    b.HasOne("TicketSystem.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("TicketSystem.Models.Ticket", null)
                         .WithMany("Activities")
                         .HasForeignKey("TicketId")

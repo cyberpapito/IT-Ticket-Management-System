@@ -104,6 +104,12 @@ namespace TicketSystem.Data
                     .IsRequired(false)
                     .OnDelete(DeleteBehavior.Restrict);
 
+                entity.HasOne<User>()
+                    .WithMany()
+                    .HasForeignKey(a => a.ActorUserId)
+                    .IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
+
                 // No query filter of its own: the history is only read through its ticket, and
                 // TicketService looks the ticket up first, so a deleted ticket's history stays hidden.
                 entity.HasIndex(a => new { a.TicketId, a.At });
@@ -129,6 +135,16 @@ namespace TicketSystem.Data
 
                 entity.Property(u => u.CreatedAt)
                     .IsRequired();
+
+                entity.Property(u => u.PasswordHash)
+                    .IsRequired(false)
+                    .HasMaxLength(User.PasswordHashMaxLength);
+
+                entity.Property(u => u.SecurityStamp)
+                    .IsRequired()
+                    .HasMaxLength(User.SecurityStampMaxLength);
+
+                entity.Ignore(u => u.IsStaff);
 
                 entity.HasData(SeedUsers.All);
             });

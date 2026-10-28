@@ -15,11 +15,17 @@ namespace TicketSystem.Tests
                 .UseInMemoryDatabase(Guid.NewGuid().ToString())
                 .Options;
 
-        // Loads the users the AddUsers migration seeds (Adrian Rodriguez, John Doe, Unknown).
+        private static readonly Guid Technician = SeedUsers.AdrianRodriguezId;
+        private static readonly Guid Reporter = SeedUsers.JohnDoeId;
+        private readonly Guid _admin;
+
+        // Loads the users the AddUsers migration seeds (Adrian Rodriguez, John Doe, Unknown), plus
+        // an admin for deletes.
         public TicketServiceTests()
         {
             using var context = new AppDbContext(_options);
             context.Database.EnsureCreated();
+            _admin = TestSupport.AddUser(_options, UserRole.Admin).GetAwaiter().GetResult();
         }
 
         private AppDbContext NewContext() => new(_options);
@@ -37,19 +43,20 @@ namespace TicketSystem.Tests
             using var context = NewContext();
             var users = await context.Users.OrderBy(u => u.Name).ToListAsync();
 
-            Assert.Equal(["Adrian Rodriguez", "John Doe", "Unknown (pre-users)"], users.Select(u => u.Name));
+            Assert.Equal(["Ada Admin", "Adrian Rodriguez", "John Doe", "Unknown (pre-users)"], users.Select(u => u.Name));
             Assert.Equal(UserRole.Technician, users.Single(u => u.Id == SeedUsers.AdrianRodriguezId).Role);
             Assert.Equal(UserRole.User, users.Single(u => u.Id == SeedUsers.JohnDoeId).Role);
         }
 
+        // The creator is the signed-in user; a session for a user who no longer exists is refused.
         [Fact]
-        public async Task CreateTicket_UnknownCreatorThrowsAndSavesNothing()
+        public async Task CreateTicket_UnknownActorIsRefusedAndSavesNothing()
         {
             using (var context = NewContext())
             {
-                var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+                var ex = await Assert.ThrowsAsync<NotAllowedException>(() =>
                     new TicketService(context).CreateTicket("Title", "desc", TicketPriority.Low, Guid.NewGuid()));
-                Assert.StartsWith("No user with id", ex.Message);
+                Assert.StartsWith("Your account no longer exists", ex.Message);
             }
 
             using var check = NewContext();
@@ -64,14 +71,14 @@ namespace TicketSystem.Tests
             using (var context = NewContext())
             {
                 var service = new TicketService(context);
-                await Assert.ThrowsAsync<ArgumentException>(() => service.AssignTicket(created.Id, Guid.NewGuid()));
-                await Assert.ThrowsAsync<ArgumentException>(() => service.AssignTicket(created.Id, SeedUsers.JohnDoeId));
-                Assert.Null(await service.AssignTicket(Guid.NewGuid(), SeedUsers.AdrianRodriguezId));  // unknown ticket
+                await Assert.ThrowsAsync<ArgumentException>(() => service.AssignTicket(created.Id, Guid.NewGuid(), Technician));
+                await Assert.ThrowsAsync<ArgumentException>(() => service.AssignTicket(created.Id, SeedUsers.JohnDoeId, Technician));
+                Assert.Null(await service.AssignTicket(Guid.NewGuid(), SeedUsers.AdrianRodriguezId, Technician));  // unknown ticket
             }
 
             using (var context = NewContext())
             {
-                var assigned = await new TicketService(context).AssignTicket(created.Id, SeedUsers.AdrianRodriguezId);
+                var assigned = await new TicketService(context).AssignTicket(created.Id, SeedUsers.AdrianRodriguezId, Technician);
                 Assert.Equal(SeedUsers.AdrianRodriguezId, assigned!.AssignedToUserId);
             }
         }
@@ -97,7 +104,7 @@ namespace TicketSystem.Tests
             {
                 var service = new TicketService(context);
                 await Assert.ThrowsAsync<ArgumentException>(() =>
-                    service.CreateTicket(" ", "desc", TicketPriority.Low, Guid.NewGuid()));
+                    service.CreateTicket(" ", "desc", TicketPriority.Low, Reporter));
             }
 
             using var check = NewContext();
@@ -110,7 +117,7 @@ namespace TicketSystem.Tests
             var created = await Seed();
 
             using var context = NewContext();
-            var found = await new TicketService(context).GetTicketById(created.Id);
+            var found = await new TicketService(context).GetTicketById(created.Id, Reporter);
 
             Assert.NotNull(found);
             Assert.Equal(created.Title, found!.Title);
@@ -122,14 +129,14 @@ namespace TicketSystem.Tests
             await Seed();
 
             using var context = NewContext();
-            Assert.Null(await new TicketService(context).GetTicketById(Guid.NewGuid()));
+            Assert.Null(await new TicketService(context).GetTicketById(Guid.NewGuid(), Reporter));
         }
 
         [Fact]
         public async Task GetAllTickets_EmptyDatabaseReturnsEmptyList()
         {
             using var context = NewContext();
-            var tickets = await new TicketService(context).GetAllTickets();
+            var tickets = await new TicketService(context).GetAllTickets(Technician);
 
             Assert.NotNull(tickets);
             Assert.Empty(tickets);
@@ -142,7 +149,7 @@ namespace TicketSystem.Tests
             var b = await Seed("Ticket B");
 
             using var context = NewContext();
-            var ids = (await new TicketService(context).GetAllTickets()).Select(t => t.Id);
+            var ids = (await new TicketService(context).GetAllTickets(Technician)).Select(t => t.Id);
 
             Assert.Equal(new[] { a.Id, b.Id }.OrderBy(i => i), ids.OrderBy(i => i));
         }
@@ -150,7 +157,7 @@ namespace TicketSystem.Tests
         private async Task Delete(Guid id)
         {
             using var context = NewContext();
-            Assert.NotNull(await new TicketService(context).SoftDeleteTicket(id));
+            Assert.NotNull(await new TicketService(context).SoftDeleteTicket(id, _admin));
         }
 
         [Fact]
@@ -170,7 +177,7 @@ namespace TicketSystem.Tests
         public async Task SoftDeleteTicket_ReturnsNullForUnknownId()
         {
             using var context = NewContext();
-            Assert.Null(await new TicketService(context).SoftDeleteTicket(Guid.NewGuid()));
+            Assert.Null(await new TicketService(context).SoftDeleteTicket(Guid.NewGuid(), _admin));
         }
 
         [Fact]
@@ -186,7 +193,7 @@ namespace TicketSystem.Tests
 
             using (var context = NewContext())
             {
-                Assert.Null(await new TicketService(context).SoftDeleteTicket(created.Id));
+                Assert.Null(await new TicketService(context).SoftDeleteTicket(created.Id, _admin));
             }
 
             using var check = NewContext();
@@ -200,7 +207,7 @@ namespace TicketSystem.Tests
             await Delete(created.Id);
 
             using var context = NewContext();
-            Assert.Null(await new TicketService(context).GetTicketById(created.Id));
+            Assert.Null(await new TicketService(context).GetTicketById(created.Id, Reporter));
         }
 
         [Fact]
@@ -211,7 +218,7 @@ namespace TicketSystem.Tests
             await Delete(deleted.Id);
 
             using var context = NewContext();
-            var tickets = await new TicketService(context).GetAllTickets();
+            var tickets = await new TicketService(context).GetAllTickets(Technician);
 
             Assert.Equal(kept.Id, Assert.Single(tickets).Id);
         }

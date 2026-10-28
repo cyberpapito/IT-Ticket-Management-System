@@ -5,6 +5,9 @@ using TicketSystem.Models;
 
 namespace TicketSystem.Services
 {
+    // Every method takes the signed-in user's id (actorId) from the session, never from the
+    // request body. Tickets the actor may not see are treated as missing (null → 404); a step the
+    // actor may see but not take throws NotAllowedException (403). See TicketPermissions.
     public class TicketService
     {
         private readonly AppDbContext _dbContext;
@@ -15,40 +18,37 @@ namespace TicketSystem.Services
         }
 
         public async Task<Ticket> CreateTicket(
-
-    string title,
-    string description,
-    TicketPriority priority,
-    Guid createdByUserId)
-
+            string title,
+            string description,
+            TicketPriority priority,
+            Guid actorId)
         {
-
-
-
-            var ticket = Ticket.Create(title, description, priority, createdByUserId);
-
-            // Checked after the ticket's own rules, so a blank title is reported before an unknown user.
-            if (!await _dbContext.Users.AnyAsync(u => u.Id == createdByUserId))
-                throw new ArgumentException($"No user with id {createdByUserId}.");
+            var actor = await Actor(actorId);
+            var ticket = Ticket.Create(title, description, priority, actor.Id);
 
             _dbContext.Tickets.Add(ticket);
-
             await _dbContext.SaveChangesAsync();
-
             return ticket;
         }
-        public async Task<Ticket?> GetTicketById(Guid ticketId)
+
+        public async Task<Ticket?> GetTicketById(Guid ticketId, Guid actorId)
         {
-            return await _dbContext.Tickets.FindAsync(ticketId);
+            var actor = await Actor(actorId);
+            return await Visible(ticketId, actor);
         }
 
-        public async Task<List<Ticket>> GetAllTickets()
+        // Staff get every ticket; a plain user gets the ones they reported.
+        public async Task<List<Ticket>> GetAllTickets(Guid actorId)
         {
-            return await _dbContext.Tickets.ToListAsync();
+            var actor = await Actor(actorId);
+            var tickets = _dbContext.Tickets.AsQueryable();
+            if (!actor.IsStaff)
+                tickets = tickets.Where(t => t.CreatedByUserId == actor.Id);
+            return await tickets.ToListAsync();
         }
 
         // The audit history: the only query that steps past the soft-delete filter. Most recently
-        // deleted first. Read-only; there is no undelete.
+        // deleted first. Read-only; there is no undelete. Admin only (the controller's [Authorize]).
         public async Task<List<Ticket>> GetDeletedTickets()
         {
             return await _dbContext.Tickets
@@ -58,48 +58,72 @@ namespace TicketSystem.Services
                 .ToListAsync();
         }
 
-        // Workflow steps. Each returns null for an unknown (or deleted) ticket; the entity throws
-        // InvalidOperationException when the step isn't allowed in the ticket's current state and
-        // ArgumentException for bad input, and nothing is saved in either case.
+        // Workflow steps. Each returns null for an unknown, deleted or invisible ticket; the entity
+        // throws InvalidOperationException when the step isn't allowed in the ticket's current
+        // state and ArgumentException for bad input, and nothing is saved in either case.
         // An unknown ticket is null (404); an unknown or non-technician user is bad input (400).
-        public async Task<Ticket?> AssignTicket(Guid ticketId, Guid technicianId)
+        public async Task<Ticket?> AssignTicket(Guid ticketId, Guid technicianId, Guid actorId)
         {
-            var ticket = await _dbContext.Tickets.FindAsync(ticketId);
+            var actor = await Actor(actorId);
+            var ticket = await Visible(ticketId, actor);
             if (ticket is null)
                 return null;
+
+            Require(TicketPermissions.CanAssign(actor, ticket), "Only technicians and admins can assign tickets.");
 
             var technician = await _dbContext.Users.FindAsync(technicianId)
                 ?? throw new ArgumentException($"No user with id {technicianId}.");
 
-            ticket.AssignTo(technician);
+            ticket.AssignTo(technician, actor.Id);
             await _dbContext.SaveChangesAsync();
             return ticket;
         }
 
-        public Task<Ticket?> StartWork(Guid ticketId) =>
-            ApplyToTicket(ticketId, ticket => ticket.StartWork());
+        public Task<Ticket?> StartWork(Guid ticketId, Guid actorId) =>
+            ApplyToTicket(ticketId, actorId, TicketPermissions.CanWork,
+                "Only the assigned technician or an admin can start work.",
+                (ticket, actor) => ticket.StartWork(actor.Id));
 
-        public Task<Ticket?> ResolveTicket(Guid ticketId, string resolutionSummary) =>
-            ApplyToTicket(ticketId, ticket => ticket.MarkResolved(resolutionSummary));
+        public Task<Ticket?> ResolveTicket(Guid ticketId, string resolutionSummary, Guid actorId) =>
+            ApplyToTicket(ticketId, actorId, TicketPermissions.CanWork,
+                "Only the assigned technician or an admin can resolve a ticket.",
+                (ticket, actor) => ticket.MarkResolved(resolutionSummary, actor.Id));
 
-        public Task<Ticket?> CloseTicket(Guid ticketId) =>
-            ApplyToTicket(ticketId, ticket => ticket.Close());
+        public Task<Ticket?> CloseTicket(Guid ticketId, Guid actorId) =>
+            ApplyToTicket(ticketId, actorId, TicketPermissions.CanClose,
+                "Only the reporter, the assigned technician or an admin can close a ticket.",
+                (ticket, actor) => ticket.Close(actor.Id));
 
-        private async Task<Ticket?> ApplyToTicket(Guid ticketId, Action<Ticket> step)
+        // Returns null for unknown and already-deleted tickets alike: the query filter
+        // hides deleted ones, so a second DELETE is a 404 rather than a domain error.
+        public Task<Ticket?> SoftDeleteTicket(Guid ticketId, Guid actorId) =>
+            ApplyToTicket(ticketId, actorId, TicketPermissions.CanDelete,
+                "Only an admin can delete a ticket.",
+                (ticket, actor) => ticket.MarkDeleted(actor.Id));
+
+        private async Task<Ticket?> ApplyToTicket(
+            Guid ticketId,
+            Guid actorId,
+            Func<User, Ticket, bool> allowed,
+            string notAllowed,
+            Action<Ticket, User> step)
         {
-            var ticket = await _dbContext.Tickets.FindAsync(ticketId);
+            var actor = await Actor(actorId);
+            var ticket = await Visible(ticketId, actor);
             if (ticket is null)
                 return null;
 
-            step(ticket);
+            Require(allowed(actor, ticket), notAllowed);
+            step(ticket, actor);
             await _dbContext.SaveChangesAsync();
             return ticket;
         }
 
-        // The ticket's history, oldest first. Null for an unknown (or deleted) ticket.
-        public async Task<List<TicketActivity>?> GetActivity(Guid ticketId)
+        // The ticket's history, oldest first. Null for an unknown, deleted or invisible ticket.
+        public async Task<List<TicketActivity>?> GetActivity(Guid ticketId, Guid actorId)
         {
-            if (!await _dbContext.Tickets.AnyAsync(t => t.Id == ticketId))
+            var actor = await Actor(actorId);
+            if (await Visible(ticketId, actor) is null)
                 return null;
 
             return await _dbContext.TicketActivities
@@ -108,35 +132,37 @@ namespace TicketSystem.Services
                 .ToListAsync();
         }
 
-        // Null for an unknown (or deleted) ticket; an unknown author is bad input (400), and the
-        // entity rejects an empty or oversized comment.
-        public async Task<TicketActivity?> AddComment(Guid ticketId, Guid authorId, string text)
+        // Null for an unknown, deleted or invisible ticket; the entity rejects an empty or
+        // oversized comment. The author is the signed-in user.
+        public async Task<TicketActivity?> AddComment(Guid ticketId, Guid actorId, string text)
         {
-            var ticket = await _dbContext.Tickets.FindAsync(ticketId);
+            var actor = await Actor(actorId);
+            var ticket = await Visible(ticketId, actor);
             if (ticket is null)
                 return null;
 
-            var author = await _dbContext.Users.FindAsync(authorId)
-                ?? throw new ArgumentException($"No user with id {authorId}.");
+            Require(TicketPermissions.CanComment(actor, ticket), "You can't comment on this ticket.");
 
-            var comment = ticket.AddComment(author, text);
+            var comment = ticket.AddComment(actor, text);
             await _dbContext.SaveChangesAsync();
             return comment;
         }
 
-        // Returns null for unknown and already-deleted tickets alike: the query filter
-        // hides deleted ones, so a second DELETE is a 404 rather than a domain error.
-        public async Task<Ticket?> SoftDeleteTicket(Guid ticketId)
+        // The session names a user that no longer exists only if the database was reset under it.
+        private async Task<User> Actor(Guid actorId) =>
+            await _dbContext.Users.FindAsync(actorId)
+            ?? throw new NotAllowedException("Your account no longer exists. Sign in again.");
+
+        private async Task<Ticket?> Visible(Guid ticketId, User actor)
         {
             var ticket = await _dbContext.Tickets.FindAsync(ticketId);
-            if (ticket is null)
-             return null;
-
-            ticket.MarkDeleted();
-            await _dbContext.SaveChangesAsync();
-            return ticket;
+            return ticket is not null && TicketPermissions.CanView(actor, ticket) ? ticket : null;
         }
 
-
+        private static void Require(bool allowed, string message)
+        {
+            if (!allowed)
+                throw new NotAllowedException(message);
+        }
     }
 }

@@ -11,8 +11,11 @@ namespace TicketSystem.Models
         public TicketActivityType Type { get; private set; }
         public DateTimeOffset At { get; private set; }
 
+        // Who did it: the signed-in user behind the step. Null only on entries from before sign-in.
+        public Guid? ActorUserId { get; private set; }
+
         // The person the entry names: the reporter on Created, the technician on Assigned, the
-        // author on Comment. Null on the other steps until there's sign-in to say who did them.
+        // author on Comment; null on the other steps (ActorUserId says who did those).
         public Guid? UserId { get; private set; }
 
         // The comment text, or the resolution summary on Resolved.
@@ -25,6 +28,7 @@ namespace TicketSystem.Models
         internal static TicketActivity For(
             Ticket ticket,
             TicketActivityType type,
+            Guid actorId,
             Guid? userId = null,
             string? note = null,
             TicketStatus? fromStatus = null,
@@ -35,6 +39,7 @@ namespace TicketSystem.Models
                 TicketId = ticket.Id,
                 Type = type,
                 At = DateTimeOffset.UtcNow,
+                ActorUserId = actorId,
                 UserId = userId,
                 Note = note,
                 FromStatus = fromStatus,
