@@ -6,37 +6,28 @@ import {
   TicketPriority,
   TITLE_MAX_LENGTH,
   type Ticket,
-  type User,
 } from '../api'
-import { UNKNOWN_USER_ID } from '../format'
 import { ErrorMessage } from './ErrorMessage'
 
 interface Props {
-  users: User[]
   onCreated: (ticket: Ticket) => void
   onCancel: () => void
 }
 
-export function NewTicketForm({ users, onCreated, onCancel }: Props) {
-  const reporters = users.filter((u) => u.id !== UNKNOWN_USER_ID)
-
+// The reporter is whoever is signed in; the API takes it from the session.
+export function NewTicketForm({ onCreated, onCancel }: Props) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState<TicketPriority>(TicketPriority.Medium)
-  const [createdByUserId, setCreatedByUserId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-
-  const reporterId = createdByUserId || reporters[0]?.id || ''
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     setSaving(true)
     setError(null)
     try {
-      onCreated(
-        await api.createTicket({ title, description, priority, createdByUserId: reporterId }),
-      )
+      onCreated(await api.createTicket({ title, description, priority }))
     } catch (err) {
       setError((err as Error).message)
       setSaving(false)
@@ -87,23 +78,12 @@ export function NewTicketForm({ users, onCreated, onCancel }: Props) {
             ))}
           </select>
         </label>
-
-        <label>
-          Reported by
-          <select value={reporterId} onChange={(e) => setCreatedByUserId(e.target.value)}>
-            {reporters.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
 
       <ErrorMessage message={error} />
 
       <div className="actions">
-        <button type="submit" className="primary" disabled={saving || reporterId === ''}>
+        <button type="submit" className="primary" disabled={saving}>
           {saving ? 'Creating…' : 'Create ticket'}
         </button>
         <button type="button" onClick={onCancel}>

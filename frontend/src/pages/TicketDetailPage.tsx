@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ApiError, api, availableSteps, UserRole, type Ticket } from '../api'
+import { ApiError, api, availableSteps, isStaff, TicketStatus, type Ticket } from '../api'
+import { useMe } from '../authContext'
 import { PriorityBadge, StatusBadge } from '../components/Badges'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { Timeline } from '../components/Timeline'
@@ -10,6 +11,7 @@ import { useUsers } from '../useUsers'
 export function TicketDetailPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
+  const me = useMe()
   const { users, nameOf } = useUsers()
 
   const [ticket, setTicket] = useState<Ticket | null>(null)
@@ -34,7 +36,7 @@ export function TicketDetailPage() {
       )
   }, [id])
 
-  // Runs one workflow step. The API's answer replaces the ticket on screen; a refusal (400/409)
+  // Runs one workflow step. The API's answer replaces the ticket on screen; a refusal (400/403/409)
   // shows its reason and leaves the ticket as it was, since the API saved nothing.
   async function run(step: () => Promise<Ticket>) {
     setBusy(true)
@@ -75,8 +77,8 @@ export function TicketDetailPage() {
 
   if (ticket === null) return <p className="muted">Loading ticket…</p>
 
-  const steps = availableSteps(ticket)
-  const technicians = users.filter((u) => u.role === UserRole.Technician)
+  const steps = availableSteps(ticket, me)
+  const technicians = users.filter(isStaff)
   const chosenTechnician =
     technicianId || ticket.assignedToUserId || technicians[0]?.id || ''
 
@@ -132,13 +134,7 @@ export function TicketDetailPage() {
             </dl>
           </article>
 
-          <Timeline
-            ticketId={ticket.id}
-            refreshKey={stepsTaken}
-            users={users}
-            nameOf={nameOf}
-            defaultAuthorId={ticket.createdByUserId}
-          />
+          <Timeline ticketId={ticket.id} refreshKey={stepsTaken} nameOf={nameOf} />
         </div>
 
         <aside className="panel workflow" aria-label="Workflow">
@@ -205,19 +201,31 @@ export function TicketDetailPage() {
           )}
 
           {!steps.assign && !steps.start && !steps.resolve && !steps.close && (
-            <p className="muted">This ticket is closed. Nothing left to do.</p>
+            <p className="muted">{waitingFor(ticket, isStaff(me))}</p>
           )}
 
           {steps.assign && ticket.assignedToUserId === null && (
             <p className="hint">Assign a technician to start or resolve this ticket.</p>
           )}
 
-          <hr />
-          <button className="danger" disabled={busy} onClick={remove}>
-            Delete ticket
-          </button>
+          {steps.delete && (
+            <>
+              <hr />
+              <button className="danger" disabled={busy} onClick={remove}>
+                Delete ticket
+              </button>
+            </>
+          )}
         </aside>
       </div>
     </>
   )
+}
+
+// Why there are no buttons: the ticket is done, or the next step is someone else's.
+function waitingFor(ticket: Ticket, staff: boolean): string {
+  if (ticket.status === TicketStatus.Closed) return 'This ticket is closed. Nothing left to do.'
+  if (ticket.status === TicketStatus.Resolved) return 'Resolved. Waiting for the reporter to close it.'
+  if (ticket.assignedToUserId === null) return 'Waiting for a technician to pick it up.'
+  return staff ? 'The assigned technician is working on it.' : 'A technician is working on it.'
 }

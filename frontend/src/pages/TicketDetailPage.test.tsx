@@ -2,8 +2,9 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
-import { TicketActivityType, TicketStatus, type Ticket, type TicketActivity } from '../api'
-import { adrian, fakeApi, john, ticket, type Routes as ApiRoutes } from '../test/fakeApi'
+import { TicketActivityType, TicketStatus, type Ticket, type TicketActivity, type User } from '../api'
+import { ada, adrian, fakeApi, john, ticket, type Routes as ApiRoutes } from '../test/fakeApi'
+import { signedInAs } from '../test/signedIn'
 import { TicketDetailPage } from './TicketDetailPage'
 
 function entry(overrides: Partial<TicketActivity>): TicketActivity {
@@ -12,6 +13,7 @@ function entry(overrides: Partial<TicketActivity>): TicketActivity {
     ticketId: 't1',
     type: TicketActivityType.Created,
     at: '2026-10-20T14:00:00+00:00',
+    actorUserId: null,
     userId: null,
     note: null,
     fromStatus: null,
@@ -22,22 +24,25 @@ function entry(overrides: Partial<TicketActivity>): TicketActivity {
 
 const workflow = () => screen.findByRole('complementary', { name: 'Workflow' })
 
-const created = entry({ userId: john.id, toStatus: TicketStatus.Open })
+const created = entry({ actorUserId: john.id, userId: john.id, toStatus: TicketStatus.Open })
 
-function renderPage(t: Ticket, routes: ApiRoutes = {}) {
+const page = () => (
+  <MemoryRouter initialEntries={['/tickets/t1']}>
+    <Routes>
+      <Route path="/tickets/:id" element={<TicketDetailPage />} />
+    </Routes>
+  </MemoryRouter>
+)
+
+// Signed in as the technician unless a test says otherwise.
+function renderPage(t: Ticket, routes: ApiRoutes = {}, me: User = adrian) {
   const fetchMock = fakeApi({
     'GET /api/tickets/t1': [200, t],
     'GET /api/users': [200, [adrian, john]],
     'GET /api/tickets/t1/activity': [200, [created]],
     ...routes,
   })
-  render(
-    <MemoryRouter initialEntries={['/tickets/t1']}>
-      <Routes>
-        <Route path="/tickets/:id" element={<TicketDetailPage />} />
-      </Routes>
-    </MemoryRouter>,
-  )
+  render(signedInAs(me, page()))
   return fetchMock
 }
 
@@ -103,9 +108,9 @@ describe('TicketDetailPage', () => {
           200,
           [
             created,
-            entry({ type: TicketActivityType.Assigned, userId: adrian.id }),
-            entry({ type: TicketActivityType.Comment, userId: adrian.id, note: 'Toner is on order' }),
-            entry({ type: TicketActivityType.Resolved, note: 'Replaced the toner' }),
+            entry({ type: TicketActivityType.Assigned, actorUserId: adrian.id, userId: adrian.id }),
+            entry({ type: TicketActivityType.Comment, actorUserId: adrian.id, userId: adrian.id, note: 'Toner is on order' }),
+            entry({ type: TicketActivityType.Resolved, actorUserId: adrian.id, note: 'Replaced the toner' }),
           ],
         ],
       },
@@ -113,12 +118,14 @@ describe('TicketDetailPage', () => {
 
     const activity = await screen.findByRole('region', { name: 'Activity' })
     expect(await within(activity).findByText('John Doe reported the ticket')).toBeInTheDocument()
+    // Took it themselves, so no "by"; the steps say who took them.
     expect(within(activity).getByText('Assigned to Adrian Rodriguez')).toBeInTheDocument()
+    expect(within(activity).getByText('Resolved by Adrian Rodriguez')).toBeInTheDocument()
     expect(within(activity).getByText('Toner is on order')).toBeInTheDocument()
     expect(within(activity).getAllByRole('listitem')).toHaveLength(4)
   })
 
-  it('posts a comment as the chosen person and adds it to the history', async () => {
+  it('posts a comment as the signed-in user and adds it to the history', async () => {
     const user = userEvent.setup()
     const fetchMock = renderPage(ticket(), {
       'POST /api/tickets/t1/comments': [
@@ -129,14 +136,14 @@ describe('TicketDetailPage', () => {
     const activity = await screen.findByRole('region', { name: 'Activity' })
     await within(activity).findByText('John Doe reported the ticket')
 
-    await user.selectOptions(within(activity).getByRole('combobox'), 'Adrian Rodriguez')
+    expect(within(activity).queryByRole('combobox')).not.toBeInTheDocument()  // no "Comment as" picker
     await user.type(within(activity).getByRole('textbox'), 'Coming by at 3')
     await user.click(within(activity).getByRole('button', { name: 'Comment' }))
 
     expect(await within(activity).findByText('Coming by at 3')).toBeInTheDocument()
     expect(within(activity).getByRole('textbox')).toHaveValue('')
     const [, init] = fetchMock.mock.calls.find(([url]) => url.endsWith('/comments'))!
-    expect(JSON.parse(init!.body as string)).toEqual({ authorUserId: adrian.id, text: 'Coming by at 3' })
+    expect(JSON.parse(init!.body as string)).toEqual({ text: 'Coming by at 3' })
   })
 
   it('reloads the history after a workflow step', async () => {
@@ -154,15 +161,30 @@ describe('TicketDetailPage', () => {
     expect(activityCalls()).toBe(before + 1)
   })
 
+  it('offers the reporter no steps on an open ticket, and Close once it is resolved', async () => {
+    renderPage(ticket({ assignedToUserId: adrian.id }), {}, john)
+    expect(await within(await workflow()).findByText('A technician is working on it.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Start work' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete ticket' })).not.toBeInTheDocument()
+  })
+
+  it('lets the reporter close their resolved ticket', async () => {
+    renderPage(ticket({ assignedToUserId: adrian.id, status: TicketStatus.Resolved }), {}, john)
+    expect(await screen.findByRole('button', { name: 'Close ticket' })).toBeInTheDocument()
+  })
+
+  it('shows Delete to admins only', async () => {
+    renderPage(ticket())
+    await workflow()
+    expect(screen.queryByRole('button', { name: 'Delete ticket' })).not.toBeInTheDocument()
+
+    renderPage(ticket(), {}, ada)
+    expect(await screen.findByRole('button', { name: 'Delete ticket' })).toBeInTheDocument()
+  })
+
   it('says so when the ticket does not exist', async () => {
     fakeApi({ 'GET /api/users': [200, []] })
-    render(
-      <MemoryRouter initialEntries={['/tickets/t1']}>
-        <Routes>
-          <Route path="/tickets/:id" element={<TicketDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    )
+    render(signedInAs(adrian, page()))
     expect(await screen.findByRole('alert')).toHaveTextContent('does not exist or was deleted')
   })
 })

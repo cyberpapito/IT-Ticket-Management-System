@@ -2,13 +2,17 @@ import { vi } from 'vitest'
 import type { Ticket, User } from '../api'
 
 // Answers fetch calls from a table of "METHOD /api/path" → [status, body]. Anything not in the
-// table is a 404, so a test fails loudly if the page calls something unexpected.
+// table is a 404, so a test fails loudly if the page calls something unexpected. The antiforgery
+// token route is always there, since every POST/PUT/DELETE fetches it first.
 export type Routes = Record<string, [number, unknown?]>
 
+export const CSRF_TOKEN = 'test-csrf-token'
+
 export function fakeApi(routes: Routes) {
+  const table: Routes = { 'GET /api/auth/csrf': [200, { token: CSRF_TOKEN }], ...routes }
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     const key = `${init?.method ?? 'GET'} ${url}`
-    const [status, body] = routes[key] ?? [404]
+    const [status, body] = table[key] ?? [404]
     return new Response(body === undefined ? null : JSON.stringify(body), {
       status,
       headers: { 'Content-Type': 'application/json' },
@@ -32,6 +36,14 @@ export const john: User = {
   email: 'john.doe@example.com',
   role: 0,
   createdAt: '2026-10-03T00:00:00+00:00',
+}
+
+export const ada: User = {
+  id: 'a0000000-0000-0000-0000-0000000000ad',
+  name: 'Ada Admin',
+  email: 'ada@example.com',
+  role: 2,
+  createdAt: '2026-10-28T00:00:00+00:00',
 }
 
 export function ticket(overrides: Partial<Ticket> = {}): Ticket {

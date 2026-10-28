@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { TicketStatus } from '../api'
 import { adrian, fakeApi, john, ticket } from '../test/fakeApi'
+import { signedInAs } from '../test/signedIn'
 import { TicketsPage } from './TicketsPage'
 
 const tickets = [
@@ -14,11 +15,7 @@ const tickets = [
 
 function renderPage() {
   fakeApi({ 'GET /api/tickets': [200, tickets], 'GET /api/users': [200, [adrian, john]] })
-  render(
-    <MemoryRouter>
-      <TicketsPage />
-    </MemoryRouter>,
-  )
+  render(signedInAs(adrian, <MemoryRouter><TicketsPage /></MemoryRouter>))
 }
 
 const titles = () =>

@@ -4,19 +4,22 @@ import {
   COMMENT_MAX_LENGTH,
   TicketActivityType,
   type TicketActivity,
-  type User,
 } from '../api'
-import { formatDateTime, UNKNOWN_USER_ID } from '../format'
+import { formatDateTime } from '../format'
 import { ErrorMessage } from './ErrorMessage'
 
 interface TimelineProps {
   ticketId: string
   // Bumped by the page after each workflow step, so the new entry shows up.
   refreshKey: number
-  users: User[]
   nameOf: (id: string | null) => string | null
-  // Who the comment box starts as; there's no sign-in yet, so the commenter is picked.
-  defaultAuthorId: string
+}
+
+// "by Adrian Rodriguez" for steps someone took; nothing on entries from before sign-in, which
+// didn't record who did them.
+function by(a: TicketActivity, nameOf: TimelineProps['nameOf']): string {
+  const name = nameOf(a.actorUserId)
+  return name === null ? '' : ` by ${name}`
 }
 
 function describe(a: TicketActivity, nameOf: TimelineProps['nameOf']): string {
@@ -24,15 +27,16 @@ function describe(a: TicketActivity, nameOf: TimelineProps['nameOf']): string {
     case TicketActivityType.Created:
       return `${nameOf(a.userId) ?? 'Someone'} reported the ticket`
     case TicketActivityType.Assigned:
-      return `Assigned to ${nameOf(a.userId) ?? 'a technician'}`
+      // Say who assigned only when it wasn't the technician taking it themselves.
+      return `Assigned to ${nameOf(a.userId) ?? 'a technician'}${a.actorUserId === a.userId ? '' : by(a, nameOf)}`
     case TicketActivityType.Started:
-      return 'Work started'
+      return `Work started${by(a, nameOf)}`
     case TicketActivityType.Resolved:
-      return 'Resolved'
+      return `Resolved${by(a, nameOf)}`
     case TicketActivityType.Closed:
-      return 'Closed'
+      return `Closed${by(a, nameOf)}`
     case TicketActivityType.Deleted:
-      return 'Deleted'
+      return `Deleted${by(a, nameOf)}`
     case TicketActivityType.Comment:
       return nameOf(a.userId) ?? 'Someone'
   }
@@ -48,11 +52,11 @@ const kind: Record<TicketActivityType, string> = {
   6: 'comment',
 }
 
-export function Timeline({ ticketId, refreshKey, users, nameOf, defaultAuthorId }: TimelineProps) {
+// The comment form posts as the signed-in user.
+export function Timeline({ ticketId, refreshKey, nameOf }: TimelineProps) {
   const [entries, setEntries] = useState<TicketActivity[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [commentError, setCommentError] = useState<string | null>(null)
-  const [authorId, setAuthorId] = useState('')
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -66,15 +70,12 @@ export function Timeline({ ticketId, refreshKey, users, nameOf, defaultAuthorId 
       .catch((e: Error) => setLoadError(e.message))
   }, [ticketId, refreshKey])
 
-  const commenters = users.filter((u) => u.id !== UNKNOWN_USER_ID)
-  const chosenAuthor = authorId || defaultAuthorId || commenters[0]?.id || ''
-
   async function addComment(e: FormEvent) {
     e.preventDefault()
     setBusy(true)
     setCommentError(null)
     try {
-      const comment = await api.addComment(ticketId, chosenAuthor, text)
+      const comment = await api.addComment(ticketId, text)
       setEntries((list) => [...(list ?? []), comment])
       setText('')
     } catch (err) {
@@ -122,17 +123,7 @@ export function Timeline({ ticketId, refreshKey, users, nameOf, defaultAuthorId 
           />
         </label>
         <div className="actions">
-          <label className="inline">
-            <span className="hint">Comment as</span>
-            <select value={chosenAuthor} onChange={(e) => setAuthorId(e.target.value)}>
-              {commenters.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="submit" className="primary" disabled={busy || chosenAuthor === ''}>
+          <button type="submit" className="primary" disabled={busy}>
             Comment
           </button>
         </div>

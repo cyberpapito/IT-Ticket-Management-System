@@ -119,6 +119,25 @@ a {
   font-weight: 600;
 }
 
+/* Who is signed in, pushed to the right end of the bar */
+.whoami {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.signin {
+  max-width: 400px;
+  margin: 12vh auto 0;
+}
+
+.center {
+  text-align: center;
+  margin-top: 20vh;
+}
+
 main {
   max-width: 1100px;
   margin: 0 auto;
@@ -266,6 +285,26 @@ button:focus-visible {
 
 .nowrap {
   white-space: nowrap;
+}
+
+.notice {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* A row's own small form, e.g. setting a user's password in the Users table */
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.inline-form input {
+  width: 14rem;
 }
 
 /* Ticket list */
@@ -575,6 +614,7 @@ td a:hover {
   .topbar {
     padding: 0.75rem 1rem;
     gap: 1rem;
+    flex-wrap: wrap;
   }
 
   .filters,
