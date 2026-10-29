@@ -57,28 +57,29 @@ namespace TicketSystem.Models
                 CreatedByUserId = createdByUserId,
                 CreatedAt = DateTimeOffset.UtcNow
             };
-            ticket.Record(TicketActivityType.Created, userId: createdByUserId, toStatus: TicketStatus.Open);
+            ticket.Record(TicketActivityType.Created, createdByUserId, userId: createdByUserId, toStatus: TicketStatus.Open);
             return ticket;
         }
 
-        // Business rules: only technicians can be assigned, and only to open tickets
-        public void AssignTo(User technician)
+        // Business rules: only staff (technicians and admins) can be assigned, and only to open
+        // tickets. The actor is whoever made the assignment, which isn't always the technician.
+        public void AssignTo(User technician, Guid actorId)
         {
-            if (technician.Role != UserRole.Technician)
-                throw new ArgumentException($"{technician.Name} is not a technician. Only technicians can be assigned.");
+            if (!technician.IsStaff)
+                throw new ArgumentException($"{technician.Name} is not a technician. Only technicians and admins can be assigned.");
 
             if (Status != TicketStatus.Open)
                 throw new InvalidOperationException(
                     $"Cannot assign a ticket that is {Status}. Only Open tickets can be assigned.");
 
             AssignedToUserId = technician.Id;
-            Record(TicketActivityType.Assigned, userId: technician.Id);
+            Record(TicketActivityType.Assigned, actorId, userId: technician.Id);
         }
 
 
          // Business rule: work can only start on an assigned, open ticket
 
-        public void StartWork()
+        public void StartWork(Guid actorId)
 {
     if (Status != TicketStatus.Open)
         throw new InvalidOperationException(
@@ -89,13 +90,13 @@ namespace TicketSystem.Models
             "Cannot start work on an unassigned ticket. Assign a technician first.");
 
     Status = TicketStatus.InProgress;
-    Record(TicketActivityType.Started, fromStatus: TicketStatus.Open, toStatus: TicketStatus.InProgress);
+    Record(TicketActivityType.Started, actorId, fromStatus: TicketStatus.Open, toStatus: TicketStatus.InProgress);
 }
 
         // Business rules: only assigned, unresolved tickets can be resolved,
         // and a resolution summary is required for the audit record.
         // Resolving twice would overwrite the original summary and ResolvedAt.
-public void MarkResolved(string resolutionSummary)
+public void MarkResolved(string resolutionSummary, Guid actorId)
 {
     if (Status is TicketStatus.Resolved or TicketStatus.Closed)
         throw new InvalidOperationException($"Cannot resolve a ticket that is already {Status}.");
@@ -111,28 +112,28 @@ public void MarkResolved(string resolutionSummary)
     Status = TicketStatus.Resolved;
     ResolutionSummary = resolutionSummary.Trim();
     ResolvedAt = DateTimeOffset.UtcNow;
-    Record(TicketActivityType.Resolved, note: ResolutionSummary, fromStatus: fromStatus, toStatus: TicketStatus.Resolved);
+    Record(TicketActivityType.Resolved, actorId, note: ResolutionSummary, fromStatus: fromStatus, toStatus: TicketStatus.Resolved);
 }
 
         // Business rule: Can't delete a ticket that is already deleted
-public void MarkDeleted()
+public void MarkDeleted(Guid actorId)
 {
     if (DeletedAt is not null)
         throw new InvalidOperationException("Ticket is already deleted.");
 
     DeletedAt = DateTimeOffset.UtcNow;
-    Record(TicketActivityType.Deleted);
+    Record(TicketActivityType.Deleted, actorId);
 }
 
         // Business rule: only resolved tickets can be closed
-public void Close()
+public void Close(Guid actorId)
         {
     if (Status != TicketStatus.Resolved)
         throw new InvalidOperationException(
             $"Cannot close a ticket that is {Status}. Tickets must be resolved before closing.");
 
     Status = TicketStatus.Closed;
-    Record(TicketActivityType.Closed, fromStatus: TicketStatus.Resolved, toStatus: TicketStatus.Closed);
+    Record(TicketActivityType.Closed, actorId, fromStatus: TicketStatus.Resolved, toStatus: TicketStatus.Closed);
         }
 
         // Business rules: a comment needs an author and some text, and a deleted ticket takes no
@@ -150,17 +151,18 @@ public void Close()
             if (text.Length > TicketActivity.NoteMaxLength)
                 throw new ArgumentException($"A comment cannot be longer than {TicketActivity.NoteMaxLength} characters.");
 
-            return Record(TicketActivityType.Comment, userId: author.Id, note: text);
+            return Record(TicketActivityType.Comment, author.Id, userId: author.Id, note: text);
         }
 
         private TicketActivity Record(
             TicketActivityType type,
+            Guid actorId,
             Guid? userId = null,
             string? note = null,
             TicketStatus? fromStatus = null,
             TicketStatus? toStatus = null)
         {
-            var activity = TicketActivity.For(this, type, userId, note, fromStatus, toStatus);
+            var activity = TicketActivity.For(this, type, actorId, userId, note, fromStatus, toStatus);
             _activities.Add(activity);
             return activity;
         }

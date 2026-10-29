@@ -4,6 +4,9 @@ namespace TicketSystem.Tests
 {
     public class TicketTests
     {
+        // Who takes the steps in these tests (the entity only records the id).
+        private static readonly Guid Actor = Guid.NewGuid();
+
         private static readonly Guid Creator = Guid.NewGuid();
         private static readonly User Technician = User.Create("Tech One", "tech1@example.com", UserRole.Technician);
 
@@ -16,8 +19,8 @@ namespace TicketSystem.Tests
         private static Ticket ResolvedTicket()
         {
             var ticket = NewTicket();
-            ticket.AssignTo(Technician);
-            ticket.MarkResolved("Power-cycled the printer");
+            ticket.AssignTo(Technician, Actor);
+            ticket.MarkResolved("Power-cycled the printer", Actor);
             return ticket;
         }
 
@@ -116,7 +119,7 @@ namespace TicketSystem.Tests
         {
             var ticket = NewTicket();
 
-            ticket.AssignTo(Technician);
+            ticket.AssignTo(Technician, Actor);
 
             Assert.Equal(Technician.Id, ticket.AssignedToUserId);
             Assert.Equal(TicketStatus.Open, ticket.Status);
@@ -128,7 +131,7 @@ namespace TicketSystem.Tests
             var ticket = NewTicket();
             var requester = User.Create("John Doe", "john.doe@example.com", UserRole.User);
 
-            var ex = Assert.Throws<ArgumentException>(() => ticket.AssignTo(requester));
+            var ex = Assert.Throws<ArgumentException>(() => ticket.AssignTo(requester, Actor));
             Assert.Contains("not a technician", ex.Message);
             Assert.Null(ticket.AssignedToUserId);
         }
@@ -139,8 +142,8 @@ namespace TicketSystem.Tests
             var ticket = NewTicket();
             var other = OtherTechnician();
 
-            ticket.AssignTo(Technician);
-            ticket.AssignTo(other);
+            ticket.AssignTo(Technician, Actor);
+            ticket.AssignTo(other, Actor);
 
             Assert.Equal(other.Id, ticket.AssignedToUserId);
         }
@@ -149,10 +152,10 @@ namespace TicketSystem.Tests
         public void AssignTo_RejectsInProgressTicket()
         {
             var ticket = NewTicket();
-            ticket.AssignTo(Technician);
-            ticket.StartWork();
+            ticket.AssignTo(Technician, Actor);
+            ticket.StartWork(Actor);
 
-            Assert.Throws<InvalidOperationException>(() => ticket.AssignTo(OtherTechnician()));
+            Assert.Throws<InvalidOperationException>(() => ticket.AssignTo(OtherTechnician(), Actor));
             Assert.Equal(Technician.Id, ticket.AssignedToUserId);
         }
 
@@ -161,7 +164,7 @@ namespace TicketSystem.Tests
         {
             var ticket = ResolvedTicket();
 
-            Assert.Throws<InvalidOperationException>(() => ticket.AssignTo(OtherTechnician()));
+            Assert.Throws<InvalidOperationException>(() => ticket.AssignTo(OtherTechnician(), Actor));
         }
 
         // StartWork
@@ -170,9 +173,9 @@ namespace TicketSystem.Tests
         public void StartWork_MovesAssignedTicketToInProgress()
         {
             var ticket = NewTicket();
-            ticket.AssignTo(Technician);
+            ticket.AssignTo(Technician, Actor);
 
-            ticket.StartWork();
+            ticket.StartWork(Actor);
 
             Assert.Equal(TicketStatus.InProgress, ticket.Status);
         }
@@ -182,7 +185,7 @@ namespace TicketSystem.Tests
         {
             var ticket = NewTicket();
 
-            Assert.Throws<InvalidOperationException>(() => ticket.StartWork());
+            Assert.Throws<InvalidOperationException>(() => ticket.StartWork(Actor));
             Assert.Equal(TicketStatus.Open, ticket.Status);
         }
 
@@ -190,10 +193,10 @@ namespace TicketSystem.Tests
         public void StartWork_RejectsTicketAlreadyInProgress()
         {
             var ticket = NewTicket();
-            ticket.AssignTo(Technician);
-            ticket.StartWork();
+            ticket.AssignTo(Technician, Actor);
+            ticket.StartWork(Actor);
 
-            Assert.Throws<InvalidOperationException>(() => ticket.StartWork());
+            Assert.Throws<InvalidOperationException>(() => ticket.StartWork(Actor));
         }
 
         // MarkResolved
@@ -202,11 +205,11 @@ namespace TicketSystem.Tests
         public void MarkResolved_RecordsTrimmedSummaryAndTime()
         {
             var ticket = NewTicket();
-            ticket.AssignTo(Technician);
-            ticket.StartWork();
+            ticket.AssignTo(Technician, Actor);
+            ticket.StartWork(Actor);
             var before = DateTimeOffset.UtcNow;
 
-            ticket.MarkResolved("  Replaced toner  ");
+            ticket.MarkResolved("  Replaced toner  ", Actor);
 
             Assert.Equal(TicketStatus.Resolved, ticket.Status);
             Assert.Equal("Replaced toner", ticket.ResolutionSummary);
@@ -218,9 +221,9 @@ namespace TicketSystem.Tests
         public void MarkResolved_AllowsAssignedOpenTicketWithoutStartingWork()
         {
             var ticket = NewTicket();
-            ticket.AssignTo(Technician);
+            ticket.AssignTo(Technician, Actor);
 
-            ticket.MarkResolved("Fixed over the phone");
+            ticket.MarkResolved("Fixed over the phone", Actor);
 
             Assert.Equal(TicketStatus.Resolved, ticket.Status);
         }
@@ -230,7 +233,7 @@ namespace TicketSystem.Tests
         {
             var ticket = NewTicket();
 
-            Assert.Throws<InvalidOperationException>(() => ticket.MarkResolved("Fixed"));
+            Assert.Throws<InvalidOperationException>(() => ticket.MarkResolved("Fixed", Actor));
             Assert.Equal(TicketStatus.Open, ticket.Status);
             Assert.Null(ticket.ResolvedAt);
         }
@@ -242,9 +245,9 @@ namespace TicketSystem.Tests
         public void MarkResolved_RequiresSummary(string? summary)
         {
             var ticket = NewTicket();
-            ticket.AssignTo(Technician);
+            ticket.AssignTo(Technician, Actor);
 
-            Assert.Throws<ArgumentException>(() => ticket.MarkResolved(summary!));
+            Assert.Throws<ArgumentException>(() => ticket.MarkResolved(summary!, Actor));
             Assert.Equal(TicketStatus.Open, ticket.Status);
             Assert.Null(ticket.ResolutionSummary);
         }
@@ -253,9 +256,9 @@ namespace TicketSystem.Tests
         public void MarkResolved_RejectsClosedTicket()
         {
             var ticket = ResolvedTicket();
-            ticket.Close();
+            ticket.Close(Actor);
 
-            Assert.Throws<InvalidOperationException>(() => ticket.MarkResolved("Again"));
+            Assert.Throws<InvalidOperationException>(() => ticket.MarkResolved("Again", Actor));
             Assert.Equal(TicketStatus.Closed, ticket.Status);
             Assert.Equal("Power-cycled the printer", ticket.ResolutionSummary);
         }
@@ -266,7 +269,7 @@ namespace TicketSystem.Tests
             var ticket = ResolvedTicket();
             var resolvedAt = ticket.ResolvedAt;
 
-            Assert.Throws<InvalidOperationException>(() => ticket.MarkResolved("Different story"));
+            Assert.Throws<InvalidOperationException>(() => ticket.MarkResolved("Different story", Actor));
             Assert.Equal(TicketStatus.Resolved, ticket.Status);
             Assert.Equal("Power-cycled the printer", ticket.ResolutionSummary);
             Assert.Equal(resolvedAt, ticket.ResolvedAt);
@@ -279,7 +282,7 @@ namespace TicketSystem.Tests
         {
             var ticket = ResolvedTicket();
 
-            ticket.Close();
+            ticket.Close(Actor);
 
             Assert.Equal(TicketStatus.Closed, ticket.Status);
         }
@@ -289,7 +292,7 @@ namespace TicketSystem.Tests
         {
             var ticket = NewTicket();
 
-            Assert.Throws<InvalidOperationException>(() => ticket.Close());
+            Assert.Throws<InvalidOperationException>(() => ticket.Close(Actor));
             Assert.Equal(TicketStatus.Open, ticket.Status);
         }
 
@@ -297,19 +300,19 @@ namespace TicketSystem.Tests
         public void Close_RejectsInProgressTicket()
         {
             var ticket = NewTicket();
-            ticket.AssignTo(Technician);
-            ticket.StartWork();
+            ticket.AssignTo(Technician, Actor);
+            ticket.StartWork(Actor);
 
-            Assert.Throws<InvalidOperationException>(() => ticket.Close());
+            Assert.Throws<InvalidOperationException>(() => ticket.Close(Actor));
         }
 
         [Fact]
         public void Close_RejectsClosedTicket()
         {
             var ticket = ResolvedTicket();
-            ticket.Close();
+            ticket.Close(Actor);
 
-            Assert.Throws<InvalidOperationException>(() => ticket.Close());
+            Assert.Throws<InvalidOperationException>(() => ticket.Close(Actor));
         }
 
         // MarkDeleted
@@ -320,7 +323,7 @@ namespace TicketSystem.Tests
             var ticket = NewTicket();
             var before = DateTimeOffset.UtcNow;
 
-            ticket.MarkDeleted();
+            ticket.MarkDeleted(Actor);
 
             Assert.NotNull(ticket.DeletedAt);
             Assert.InRange(ticket.DeletedAt!.Value, before, DateTimeOffset.UtcNow);
@@ -331,10 +334,10 @@ namespace TicketSystem.Tests
         public void MarkDeleted_TwiceKeepsOriginalTimestamp()
         {
             var ticket = NewTicket();
-            ticket.MarkDeleted();
+            ticket.MarkDeleted(Actor);
             var original = ticket.DeletedAt;
 
-            Assert.Throws<InvalidOperationException>(() => ticket.MarkDeleted());
+            Assert.Throws<InvalidOperationException>(() => ticket.MarkDeleted(Actor));
             Assert.Equal(original, ticket.DeletedAt);
         }
 
@@ -345,10 +348,10 @@ namespace TicketSystem.Tests
         {
             var ticket = NewTicket();
 
-            ticket.AssignTo(Technician);
-            ticket.StartWork();
-            ticket.MarkResolved("Reinstalled driver");
-            ticket.Close();
+            ticket.AssignTo(Technician, Actor);
+            ticket.StartWork(Actor);
+            ticket.MarkResolved("Reinstalled driver", Actor);
+            ticket.Close(Actor);
 
             Assert.Equal(TicketStatus.Closed, ticket.Status);
             Assert.Equal(Technician.Id, ticket.AssignedToUserId);

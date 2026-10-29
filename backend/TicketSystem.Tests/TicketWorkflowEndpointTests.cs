@@ -19,17 +19,22 @@ namespace TicketSystem.Tests
                 .UseInMemoryDatabase(Guid.NewGuid().ToString())
                 .Options;
 
-        // Loads the users the AddUsers migration seeds (Adrian Rodriguez, John Doe, Unknown).
+        private readonly Guid _admin;
+
+        // Loads the users the AddUsers migration seeds (Adrian Rodriguez, John Doe, Unknown), plus
+        // an admin for deletes.
         public TicketWorkflowEndpointTests()
         {
             using var context = new AppDbContext(_options);
             context.Database.EnsureCreated();
+            _admin = TestSupport.AddUser(_options, UserRole.Admin).GetAwaiter().GetResult();
         }
 
-        private async Task<T> WithController<T>(Func<TicketsController, Task<T>> act)
+        // Signed in as the technician by default: they assign the ticket to themselves, then work it.
+        private async Task<T> WithController<T>(Func<TicketsController, Task<T>> act, Guid? signedInAs = null)
         {
             using var context = new AppDbContext(_options);
-            return await act(new TicketsController(new TicketService(context)));
+            return await act(new TicketsController(new TicketService(context)).SignedInAs(signedInAs ?? Technician));
         }
 
         private async Task<Guid> NewTicket()
@@ -86,21 +91,22 @@ namespace TicketSystem.Tests
             Assert.IsType<NotFoundResult>((await WithController(c => c.CloseTicket(missing))).Result);
 
             var id = await NewTicket();
-            await WithController(c => c.DeleteTicket(id));
+            await WithController(c => c.DeleteTicket(id), _admin);
             Assert.IsType<NotFoundResult>(
                 (await WithController(c => c.AssignTicket(id, new AssignTicketRequest { TechnicianId = Technician }))).Result);
         }
 
+        // As an admin, who may take any step, so only the ticket's state says no.
         [Fact]
         public async Task StepNotAllowedInCurrentStateIs409AndSavesNothing()
         {
             var id = await NewTicket();
 
-            var problem = Problem<ConflictObjectResult>(await WithController(c => c.StartWork(id)), 409);
+            var problem = Problem<ConflictObjectResult>(await WithController(c => c.StartWork(id), _admin), 409);
             Assert.Contains("unassigned", problem.Detail);
-            Problem<ConflictObjectResult>(await WithController(c => c.CloseTicket(id)), 409);
+            Problem<ConflictObjectResult>(await WithController(c => c.CloseTicket(id), _admin), 409);
             Problem<ConflictObjectResult>(
-                await WithController(c => c.ResolveTicket(id, new ResolveTicketRequest { ResolutionSummary = "Done" })), 409);
+                await WithController(c => c.ResolveTicket(id, new ResolveTicketRequest { ResolutionSummary = "Done" }), _admin), 409);
 
             var stored = await Stored(id);
             Assert.Equal(TicketStatus.Open, stored.Status);
@@ -128,7 +134,7 @@ namespace TicketSystem.Tests
 
             Guid otherTechnician;
             using (var context = new AppDbContext(_options))
-                otherTechnician = (await new UserService(context).CreateUser("Tech Two", "tech2@example.com", UserRole.Technician)).Id;
+                otherTechnician = (await TestSupport.UserService(context).CreateUser("Tech Two", "tech2@example.com", UserRole.Technician, TestSupport.Password)).Id;
 
             Problem<ConflictObjectResult>(
                 await WithController(c => c.AssignTicket(id, new AssignTicketRequest { TechnicianId = otherTechnician })), 409);
@@ -142,7 +148,7 @@ namespace TicketSystem.Tests
 
             var problem = Problem<BadRequestObjectResult>(
                 await WithController(c => c.AssignTicket(id, new AssignTicketRequest { TechnicianId = SeedUsers.JohnDoeId })), 400);
-            Assert.Equal("John Doe is not a technician. Only technicians can be assigned.", problem.Detail);
+            Assert.Equal("John Doe is not a technician. Only technicians and admins can be assigned.", problem.Detail);
             Assert.Null((await Stored(id)).AssignedToUserId);
         }
 

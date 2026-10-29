@@ -61,18 +61,21 @@ Notes on threats with no new control: 0015 and 0016 are already covered by the d
 - Audience is still open: real users, or a public demo. A public demo should reset its data on a schedule rather than leave writes open.
 - Assumed: development connects with a single SQL login that has broad rights (0012).
 - Assumed: only the repository owner can push to `main`.
-- Sign-in choice: ASP.NET Core Identity (self-contained) or OIDC with Entra ID.
+- Sign-in choice (decided): cookie sessions with ASP.NET Core's `PasswordHasher`, not the full Identity stack or Entra ID. Users are few and admin-managed, and a cookie keeps the token out of JavaScript.
 
 # CHECKLIST FOR THE SIGN-IN WORK
 
 Pulled from the table above. Each item closes a threat before the app is deployed:
 
-- [ ] Authentication on every endpoint by default (0001)
-- [ ] Identity taken from the session, never from the request body: drop `CreatedByUserId` and `AuthorUserId` (0002)
-- [ ] Admin-only user creation and role changes (0003)
-- [ ] Role and ownership policies on workflow steps, deletes and comments (0004)
-- [ ] Ticket and user lists filtered by role; `/deleted` for Admin only (0005)
-- [ ] An actor recorded on every activity (0006)
-- [ ] CSRF protection if sign-in uses cookies (0008)
+Done with sign-in and roles:
 
-Before deploy: rate limiting and paging (0007), Production settings (0009), TLS (0010), a least-privilege database login (0012).
+- [x] Authentication on every endpoint by default (0001): a fallback policy; only `GET /api/auth/csrf` and `POST /api/auth/login` allow anonymous callers
+- [x] Identity taken from the session, never from the request body: `CreatedByUserId` and `AuthorUserId` dropped (0002)
+- [x] Admin-only user creation and role changes (0003), plus admin password resets; the last admin can't be demoted
+- [x] Role and ownership policies on workflow steps, deletes and comments (0004): `TicketPermissions`
+- [x] Ticket and user lists filtered by role; `/deleted` for Admin only (0005)
+- [x] An actor recorded on every activity (0006): `TicketActivity.ActorUserId`
+- [x] CSRF protection for the cookie (0008): SameSite=Strict plus an antiforgery header on every POST/PUT/DELETE
+- [x] Login rate limiting (part of 0007): 5 attempts per minute per IP
+
+Before deploy: paging on the lists (rest of 0007), Production settings (0009), TLS (0010), a least-privilege database login (0012).

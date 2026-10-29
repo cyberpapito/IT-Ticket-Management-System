@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { api, priorityLabels, statusLabels, TicketPriority, TicketStatus, type Ticket } from '../api'
+import { api, isStaff, priorityLabels, statusLabels, TicketPriority, TicketStatus, type Ticket } from '../api'
 import { PriorityBadge, StatusBadge } from '../components/Badges'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { NewTicketForm } from '../components/NewTicketForm'
 import { formatDateTime } from '../format'
+import { useMe } from '../authContext'
 import { useUsers } from '../useUsers'
 
 // "active" is everything not yet closed, the default view for a support queue
@@ -13,7 +14,8 @@ type PriorityFilter = 'all' | `${TicketPriority}`
 
 export function TicketsPage() {
   const navigate = useNavigate()
-  const { users, error: usersError, nameOf } = useUsers()
+  const me = useMe()
+  const { error: usersError, nameOf } = useUsers()
 
   const [tickets, setTickets] = useState<Ticket[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -57,7 +59,7 @@ export function TicketsPage() {
   return (
     <>
       <div className="page-head">
-        <h1>Tickets</h1>
+        <h1>{isStaff(me) ? 'Tickets' : 'My tickets'}</h1>
         {!showForm && (
           <button className="primary" onClick={() => setShowForm(true)}>
             New ticket
@@ -67,7 +69,6 @@ export function TicketsPage() {
 
       {showForm && (
         <NewTicketForm
-          users={users}
           onCreated={(t) => navigate(`/tickets/${t.id}`)}
           onCancel={() => setShowForm(false)}
         />

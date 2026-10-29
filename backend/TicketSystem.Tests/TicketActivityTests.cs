@@ -12,6 +12,9 @@ namespace TicketSystem.Tests
     // activity and comment endpoints. Saved state is read back through a fresh context.
     public class TicketActivityTests
     {
+        // Who takes the steps in these tests (the entity only records the id).
+        private static readonly Guid Actor = Guid.NewGuid();
+
         private static readonly User Technician = User.Create("Tech One", "tech1@example.com", UserRole.Technician);
         private static readonly User Requester = User.Create("Pat Lee", "pat.lee@example.com", UserRole.User);
 
@@ -20,11 +23,15 @@ namespace TicketSystem.Tests
                 .UseInMemoryDatabase(Guid.NewGuid().ToString())
                 .Options;
 
-        // Loads the users the AddUsers migration seeds (Adrian Rodriguez, John Doe, Unknown).
+        private readonly Guid _admin;
+
+        // Loads the users the AddUsers migration seeds (Adrian Rodriguez, John Doe, Unknown), plus
+        // an admin for deletes.
         public TicketActivityTests()
         {
             using var context = new AppDbContext(_options);
             context.Database.EnsureCreated();
+            _admin = TestSupport.AddUser(_options, UserRole.Admin).GetAwaiter().GetResult();
         }
 
         private AppDbContext NewContext() => new(_options);
@@ -60,11 +67,11 @@ namespace TicketSystem.Tests
         public void FullLifecycle_RecordsEachStepInOrder()
         {
             var ticket = NewEntity();
-            ticket.AssignTo(Technician);
-            ticket.StartWork();
-            ticket.MarkResolved("  Replaced the toner  ");
-            ticket.Close();
-            ticket.MarkDeleted();
+            ticket.AssignTo(Technician, Actor);
+            ticket.StartWork(Actor);
+            ticket.MarkResolved("  Replaced the toner  ", Actor);
+            ticket.Close(Actor);
+            ticket.MarkDeleted(Actor);
 
             Assert.Equal(
                 [TicketActivityType.Created, TicketActivityType.Assigned, TicketActivityType.Started,
@@ -90,8 +97,8 @@ namespace TicketSystem.Tests
         public void ResolveWithoutStarting_RecordsOpenAsTheFromStatus()
         {
             var ticket = NewEntity();
-            ticket.AssignTo(Technician);
-            ticket.MarkResolved("Fixed over the phone");
+            ticket.AssignTo(Technician, Actor);
+            ticket.MarkResolved("Fixed over the phone", Actor);
 
             Assert.Equal(TicketStatus.Open, ticket.Activities[^1].FromStatus);
         }
@@ -101,9 +108,9 @@ namespace TicketSystem.Tests
         {
             var ticket = NewEntity();
 
-            Assert.Throws<InvalidOperationException>(() => ticket.Close());
-            Assert.Throws<InvalidOperationException>(() => ticket.StartWork());
-            Assert.Throws<ArgumentException>(() => ticket.AssignTo(Requester));
+            Assert.Throws<InvalidOperationException>(() => ticket.Close(Actor));
+            Assert.Throws<InvalidOperationException>(() => ticket.StartWork(Actor));
+            Assert.Throws<ArgumentException>(() => ticket.AssignTo(Requester, Actor));
 
             Assert.Single(ticket.Activities);
         }
@@ -128,9 +135,9 @@ namespace TicketSystem.Tests
         public void AddComment_AllowedOnAClosedTicket()
         {
             var ticket = NewEntity();
-            ticket.AssignTo(Technician);
-            ticket.MarkResolved("Rebooted");
-            ticket.Close();
+            ticket.AssignTo(Technician, Actor);
+            ticket.MarkResolved("Rebooted", Actor);
+            ticket.Close(Actor);
 
             ticket.AddComment(Requester, "Broke again this morning");
 
@@ -163,7 +170,7 @@ namespace TicketSystem.Tests
         public void AddComment_DeletedTicketIsRejected()
         {
             var ticket = NewEntity();
-            ticket.MarkDeleted();
+            ticket.MarkDeleted(Actor);
 
             Assert.Throws<InvalidOperationException>(() => ticket.AddComment(Requester, "Hello?"));
         }
@@ -178,15 +185,15 @@ namespace TicketSystem.Tests
             using (var context = NewContext())
             {
                 var service = new TicketService(context);
-                await service.AssignTicket(id, SeedUsers.AdrianRodriguezId);
-                await service.StartWork(id);
+                await service.AssignTicket(id, SeedUsers.AdrianRodriguezId, _admin);
+                await service.StartWork(id, SeedUsers.AdrianRodriguezId);
                 await service.AddComment(id, SeedUsers.JohnDoeId, "Thanks!");
-                await service.ResolveTicket(id, "Reseated the RAM");
+                await service.ResolveTicket(id, "Reseated the RAM", SeedUsers.AdrianRodriguezId);
             }
 
             using (var context = NewContext())
             {
-                var activity = await new TicketService(context).GetActivity(id);
+                var activity = await new TicketService(context).GetActivity(id, SeedUsers.JohnDoeId);
 
                 Assert.NotNull(activity);
                 Assert.Equal(
@@ -196,6 +203,11 @@ namespace TicketSystem.Tests
                 Assert.Equal(SeedUsers.JohnDoeId, activity[0].UserId);
                 Assert.Equal(SeedUsers.AdrianRodriguezId, activity[1].UserId);
                 Assert.Equal("Thanks!", activity[3].Note);
+                // Who did each step: the reporter, the admin who assigned, the technician, the
+                // commenter, the technician again.
+                Assert.Equal(
+                    [SeedUsers.JohnDoeId, _admin, SeedUsers.AdrianRodriguezId, SeedUsers.JohnDoeId, SeedUsers.AdrianRodriguezId],
+                    activity.Select(a => a.ActorUserId!.Value));
             }
         }
 
@@ -207,14 +219,14 @@ namespace TicketSystem.Tests
             using (var context = NewContext())
             {
                 var service = new TicketService(context);
-                Assert.Null(await service.GetActivity(Guid.NewGuid()));
+                Assert.Null(await service.GetActivity(Guid.NewGuid(), _admin));
 
-                await service.SoftDeleteTicket(id);
+                await service.SoftDeleteTicket(id, _admin);
             }
 
             using (var context = NewContext())
             {
-                Assert.Null(await new TicketService(context).GetActivity(id));
+                Assert.Null(await new TicketService(context).GetActivity(id, _admin));
 
                 // The Deleted entry is still saved, for the audit history.
                 var stored = await context.TicketActivities.Where(a => a.TicketId == id).ToListAsync();
@@ -223,15 +235,15 @@ namespace TicketSystem.Tests
         }
 
         [Fact]
-        public async Task AddComment_UnknownAuthorThrowsAndSavesNothing()
+        public async Task AddComment_UnknownAuthorIsRefusedAndSavesNothing()
         {
             var id = await NewTicket();
 
             using (var context = NewContext())
             {
-                var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+                var ex = await Assert.ThrowsAsync<NotAllowedException>(() =>
                     new TicketService(context).AddComment(id, Guid.NewGuid(), "Hello"));
-                Assert.StartsWith("No user with id", ex.Message);
+                Assert.StartsWith("Your account no longer exists", ex.Message);
             }
 
             using (var context = NewContext())
@@ -249,17 +261,18 @@ namespace TicketSystem.Tests
 
             using (var context = NewContext())
             {
-                var result = await new TicketsController(new TicketService(context))
-                    .AddComment(id, new AddCommentRequest { AuthorUserId = SeedUsers.JohnDoeId, Text = "Any update?" });
+                var result = await new TicketsController(new TicketService(context)).SignedInAs(SeedUsers.JohnDoeId)
+                    .AddComment(id, new AddCommentRequest { Text = "Any update?" });
 
                 var created = Assert.IsType<CreatedAtActionResult>(result.Result);
                 var comment = Assert.IsType<TicketActivity>(created.Value);
                 Assert.Equal("Any update?", comment.Note);
+                Assert.Equal(SeedUsers.JohnDoeId, comment.UserId);
             }
 
             using (var context = NewContext())
             {
-                var result = await new TicketsController(new TicketService(context)).GetActivity(id);
+                var result = await new TicketsController(new TicketService(context)).SignedInAs(SeedUsers.JohnDoeId).GetActivity(id);
 
                 var list = Assert.IsType<List<TicketActivity>>(Assert.IsType<OkObjectResult>(result.Result).Value);
                 Assert.Equal([TicketActivityType.Created, TicketActivityType.Comment], list.Select(a => a.Type));
@@ -272,16 +285,13 @@ namespace TicketSystem.Tests
             var id = await NewTicket();
 
             using var context = NewContext();
-            var controller = new TicketsController(new TicketService(context));
+            var controller = new TicketsController(new TicketService(context)).SignedInAs(SeedUsers.JohnDoeId);
 
-            var empty = await controller.AddComment(id, new AddCommentRequest { AuthorUserId = SeedUsers.JohnDoeId, Text = " " });
+            var empty = await controller.AddComment(id, new AddCommentRequest { Text = " " });
             var problem = Assert.IsType<ProblemDetails>(Assert.IsType<BadRequestObjectResult>(empty.Result).Value);
             Assert.Equal("A comment cannot be empty.", problem.Detail);
 
-            var noAuthor = await controller.AddComment(id, new AddCommentRequest { AuthorUserId = Guid.NewGuid(), Text = "Hi" });
-            Assert.IsType<BadRequestObjectResult>(noAuthor.Result);
-
-            var noTicket = await controller.AddComment(Guid.NewGuid(), new AddCommentRequest { AuthorUserId = SeedUsers.JohnDoeId, Text = "Hi" });
+            var noTicket = await controller.AddComment(Guid.NewGuid(), new AddCommentRequest { Text = "Hi" });
             Assert.IsType<NotFoundResult>(noTicket.Result);
 
             var noTimeline = await controller.GetActivity(Guid.NewGuid());
